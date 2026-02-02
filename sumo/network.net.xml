@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- 
+    SUMO Network File - Urban Intersection with Multi-lane Roads
+    
+    This network defines a cross-shaped intersection with:
+    - 4 junctions (nodes): center intersection + 3 boundary nodes
+    - 8 edges (roads): 2 edges per direction (bidirectional)
+    - Each road has 3 lanes (typical urban arterial)
+    - Traffic lights at the central intersection
+    - Speed limit: 13.89 m/s (50 km/h, typical urban speed)
+    
+    Coordinate System:
+    - Center intersection at (0, 0)
+    - North: (0, 200), South: (0, -200)
+    - East: (200, 0), West: (-200, 0)
+-->
+
+<net version="1.16" junctionCornerDetail="5" limitTurnSpeed="5.50" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/net_file.xsd">
+
+    <location netOffset="0.00,0.00" convBoundary="-200.00,-200.00,200.00,200.00" origBoundary="-200.00,-200.00,200.00,200.00" projParameter="!"/>
+
+    <!-- ============================================ -->
+    <!-- NODES (Junctions)                            -->
+    <!-- ============================================ -->
+    
+    <!-- Central intersection with traffic lights -->
+    <node id="center" type="traffic_light" x="0.00" y="0.00" z="0.00"/>
+    
+    <!-- Boundary nodes (entry/exit points) -->
+    <node id="north" type="priority" x="0.00" y="200.00" z="0.00"/>
+    <node id="south" type="priority" x="0.00" y="-200.00" z="0.00"/>
+    <node id="east" type="priority" x="200.00" y="0.00" z="0.00"/>
+    <node id="west" type="priority" x="-200.00" y="0.00" z="0.00"/>
+
+    <!-- ============================================ -->
+    <!-- EDGES (Roads)                                -->
+    <!-- ============================================ -->
+    
+    <!-- North-South Roads -->
+    <!-- From north boundary to center -->
+    <edge id="n2c" from="north" to="center" priority="2" numLanes="3" speed="13.89">
+        <lane id="n2c_0" index="0" speed="13.89" length="200.00" shape="-4.80,200.00 -4.80,0.00"/>
+        <lane id="n2c_1" index="1" speed="13.89" length="200.00" shape="-1.60,200.00 -1.60,0.00"/>
+        <lane id="n2c_2" index="2" speed="13.89" length="200.00" shape="1.60,200.00 1.60,0.00"/>
+    </edge>
+    
+    <!-- From center to south boundary -->
+    <edge id="c2s" from="center" to="south" priority="2" numLanes="3" speed="13.89">
+        <lane id="c2s_0" index="0" speed="13.89" length="200.00" shape="-4.80,0.00 -4.80,-200.00"/>
+        <lane id="c2s_1" index="1" speed="13.89" length="200.00" shape="-1.60,0.00 -1.60,-200.00"/>
+        <lane id="c2s_2" index="2" speed="13.89" length="200.00" shape="1.60,0.00 1.60,-200.00"/>
+    </edge>
+    
+    <!-- From south boundary to center -->
+    <edge id="s2c" from="south" to="center" priority="2" numLanes="3" speed="13.89">
+        <lane id="s2c_0" index="0" speed="13.89" length="200.00" shape="4.80,-200.00 4.80,0.00"/>
+        <lane id="s2c_1" index="1" speed="13.89" length="200.00" shape="1.60,-200.00 1.60,0.00"/>
+        <lane id="s2c_2" index="2" speed="13.89" length="200.00" shape="-1.60,-200.00 -1.60,0.00"/>
+    </edge>
+    
+    <!-- From center to north boundary -->
+    <edge id="c2n" from="center" to="north" priority="2" numLanes="3" speed="13.89">
+        <lane id="c2n_0" index="0" speed="13.89" length="200.00" shape="4.80,0.00 4.80,200.00"/>
+        <lane id="c2n_1" index="1" speed="13.89" length="200.00" shape="1.60,0.00 1.60,200.00"/>
+        <lane id="c2n_2" index="2" speed="13.89" length="200.00" shape="-1.60,0.00 -1.60,200.00"/>
+    </edge>
+    
+    <!-- East-West Roads -->
+    <!-- From east boundary to center -->
+    <edge id="e2c" from="east" to="center" priority="2" numLanes="3" speed="13.89">
+        <lane id="e2c_0" index="0" speed="13.89" length="200.00" shape="200.00,4.80 0.00,4.80"/>
+        <lane id="e2c_1" index="1" speed="13.89" length="200.00" shape="200.00,1.60 0.00,1.60"/>
+        <lane id="e2c_2" index="2" speed="13.89" length="200.00" shape="200.00,-1.60 0.00,-1.60"/>
+    </edge>
+    
+    <!-- From center to west boundary -->
+    <edge id="c2w" from="center" to="west" priority="2" numLanes="3" speed="13.89">
+        <lane id="c2w_0" index="0" speed="13.89" length="200.00" shape="0.00,4.80 -200.00,4.80"/>
+        <lane id="c2w_1" index="1" speed="13.89" length="200.00" shape="0.00,1.60 -200.00,1.60"/>
+        <lane id="c2w_2" index="2" speed="13.89" length="200.00" shape="0.00,-1.60 -200.00,-1.60"/>
+    </edge>
+    
+    <!-- From west boundary to center -->
+    <edge id="w2c" from="west" to="center" priority="2" numLanes="3" speed="13.89">
+        <lane id="w2c_0" index="0" speed="13.89" length="200.00" shape="-200.00,-4.80 0.00,-4.80"/>
+        <lane id="w2c_1" index="1" speed="13.89" length="200.00" shape="-200.00,-1.60 0.00,-1.60"/>
+        <lane id="w2c_2" index="2" speed="13.89" length="200.00" shape="-200.00,1.60 0.00,1.60"/>
+    </edge>
+    
+    <!-- From center to east boundary -->
+    <edge id="c2e" from="center" to="east" priority="2" numLanes="3" speed="13.89">
+        <lane id="c2e_0" index="0" speed="13.89" length="200.00" shape="0.00,-4.80 200.00,-4.80"/>
+        <lane id="c2e_1" index="1" speed="13.89" length="200.00" shape="0.00,-1.60 200.00,-1.60"/>
+        <lane id="c2e_2" index="2" speed="13.89" length="200.00" shape="0.00,1.60 200.00,1.60"/>
+    </edge>
+
+    <!-- ============================================ -->
+    <!-- TRAFFIC LIGHT LOGIC                          -->
+    <!-- ============================================ -->
+    
+    <!-- 
+        Traffic light program for the central intersection
+        
+        Phase structure (4-phase control):
+        1. North-South green (30s)
+        2. North-South yellow (3s)
+        3. East-West green (30s)
+        4. East-West yellow (3s)
+        
+        State string format: one character per connection
+        - 'G' = green (go)
+        - 'y' = yellow (prepare to stop)
+        - 'r' = red (stop)
+        - 'g' = green without priority
+    -->
+    <tlLogic id="center" type="static" programID="0" offset="0">
+        <!-- North-South green, East-West red -->
+        <phase duration="30" state="GGGrrrGGGrrr"/>
+        <!-- North-South yellow, East-West red -->
+        <phase duration="3" state="yyyrrryyyrrr"/>
+        <!-- North-South red, East-West green -->
+        <phase duration="30" state="rrrGGGrrrGGG"/>
+        <!-- North-South red, East-West yellow -->
+        <phase duration="3" state="rrryyyrrryyy"/>
+    </tlLogic>
+
+    <!-- ============================================ -->
+    <!-- CONNECTIONS (Turn movements at intersection) -->
+    <!-- ============================================ -->
+    
+    <!-- North to other directions -->
+    <connection from="n2c" to="c2s" fromLane="0" toLane="0" via=":center_0_0" tl="center" linkIndex="0" dir="s" state="o"/>
+    <connection from="n2c" to="c2e" fromLane="1" toLane="1" via=":center_0_1" tl="center" linkIndex="1" dir="l" state="o"/>
+    <connection from="n2c" to="c2w" fromLane="2" toLane="2" via=":center_0_2" tl="center" linkIndex="2" dir="r" state="o"/>
+    
+    <!-- East to other directions -->
+    <connection from="e2c" to="c2w" fromLane="0" toLane="0" via=":center_3_0" tl="center" linkIndex="3" dir="s" state="o"/>
+    <connection from="e2c" to="c2s" fromLane="1" toLane="1" via=":center_3_1" tl="center" linkIndex="4" dir="l" state="o"/>
+    <connection from="e2c" to="c2n" fromLane="2" toLane="2" via=":center_3_2" tl="center" linkIndex="5" dir="r" state="o"/>
+    
+    <!-- South to other directions -->
+    <connection from="s2c" to="c2n" fromLane="0" toLane="0" via=":center_6_0" tl="center" linkIndex="6" dir="s" state="o"/>
+    <connection from="s2c" to="c2w" fromLane="1" toLane="1" via=":center_6_1" tl="center" linkIndex="7" dir="l" state="o"/>
+    <connection from="s2c" to="c2e" fromLane="2" toLane="2" via=":center_6_2" tl="center" linkIndex="8" dir="r" state="o"/>
+    
+    <!-- West to other directions -->
+    <connection from="w2c" to="c2e" fromLane="0" toLane="0" via=":center_9_0" tl="center" linkIndex="9" dir="s" state="o"/>
+    <connection from="w2c" to="c2n" fromLane="1" toLane="1" via=":center_9_1" tl="center" linkIndex="10" dir="l" state="o"/>
+    <connection from="w2c" to="c2s" fromLane="2" toLane="2" via=":center_9_2" tl="center" linkIndex="11" dir="r" state="o"/>
+
+</net>

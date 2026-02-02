@@ -1,0 +1,11 @@
+Metric,Value
+total_latency_records,0
+total_message_attempts,0
+successful_messages,0
+failed_messages,0
+total_ambulance_journeys,1
+total_lane_clearances,0
+total_speed_measurements,11
+avg_ambulance_travel_time,19.900000000000002
+avg_ambulance_speed,0.0
+avg_speed_variance,0.0

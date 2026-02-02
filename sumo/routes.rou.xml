@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+    SUMO Routes File - Vehicle Definitions and Routes
+    
+    This file defines:
+    1. Vehicle types (normal passenger cars and emergency ambulance)
+    2. Routes through the network
+    3. Individual vehicle instances with departure times
+    
+    Scenario:
+    - 20 normal vehicles with varied routes and departure times
+    - 1 emergency vehicle (ambulance) departing at t=10s
+    - Emergency vehicle has higher acceleration and different color
+    - Vehicles travel through the intersection in various directions
+-->
+
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+
+    <!-- ============================================ -->
+    <!-- VEHICLE TYPE DEFINITIONS                     -->
+    <!-- ============================================ -->
+    
+    <!--
+        Standard passenger car
+        - Length: 5m (typical sedan)
+        - Max speed: 50 km/h (13.89 m/s)
+        - Acceleration: 2.6 m/s²
+        - Deceleration: 4.5 m/s²
+        - Color: Yellow (for visibility in SUMO-GUI)
+    -->
+    <vType id="normal_car" accel="2.6" decel="4.5" sigma="0.5" length="5" minGap="2.5" maxSpeed="13.89" color="yellow"/>
+    
+    <!--
+        Emergency vehicle (Ambulance)
+        - Length: 6m (larger than normal car)
+        - Max speed: 60 km/h (16.67 m/s) - can exceed normal speed limit
+        - Acceleration: 3.5 m/s² (faster than normal)
+        - Deceleration: 5.0 m/s² (better brakes)
+        - Color: Red (emergency vehicle)
+        - Vehicle class: emergency (allows special privileges)
+    -->
+    <vType id="ambulance" vClass="emergency" accel="3.5" decel="5.0" sigma="0.3" length="6" minGap="2.5" maxSpeed="16.67" color="red"/>
+
+    <!-- ============================================ -->
+    <!-- ROUTE DEFINITIONS                            -->
+    <!-- ============================================ -->
+    
+    <!-- North to South routes -->
+    <route id="route_n2s" edges="n2c c2s"/>
+    
+    <!-- North to East routes -->
+    <route id="route_n2e" edges="n2c c2e"/>
+    
+    <!-- North to West routes -->
+    <route id="route_n2w" edges="n2c c2w"/>
+    
+    <!-- South to North routes -->
+    <route id="route_s2n" edges="s2c c2n"/>
+    
+    <!-- South to East routes -->
+    <route id="route_s2e" edges="s2c c2e"/>
+    
+    <!-- South to West routes -->
+    <route id="route_s2w" edges="s2c c2w"/>
+    
+    <!-- East to West routes -->
+    <route id="route_e2w" edges="e2c c2w"/>
+    
+    <!-- East to North routes -->
+    <route id="route_e2n" edges="e2c c2n"/>
+    
+    <!-- East to South routes -->
+    <route id="route_e2s" edges="e2c c2s"/>
+    
+    <!-- West to East routes -->
+    <route id="route_w2e" edges="w2c c2e"/>
+    
+    <!-- West to North routes -->
+    <route id="route_w2n" edges="w2c c2n"/>
+    
+    <!-- West to South routes -->
+    <route id="route_w2s" edges="w2c c2s"/>
+
+    <!-- ============================================ -->
+    <!-- VEHICLE INSTANCES                            -->
+    <!-- ============================================ -->
+    
+    <!-- 
+        Normal vehicles with staggered departure times
+        Distributed across different routes to create realistic traffic
+        Depart times: 0-30 seconds
+    -->
+    
+    <!-- Vehicles from North -->
+    <vehicle id="car_0" type="normal_car" route="route_n2s" depart="0" departLane="best" departSpeed="max"/>
+    <vehicle id="car_1" type="normal_car" route="route_n2e" depart="2" departLane="best" departSpeed="max"/>
+    <vehicle id="car_2" type="normal_car" route="route_n2w" depart="4" departLane="best" departSpeed="max"/>
+    
+    <!-- Vehicles from South -->
+    <vehicle id="car_3" type="normal_car" route="route_s2n" depart="1" departLane="best" departSpeed="max"/>
+    <vehicle id="car_4" type="normal_car" route="route_s2e" depart="3" departLane="best" departSpeed="max"/>
+    <vehicle id="car_5" type="normal_car" route="route_s2w" depart="5" departLane="best" departSpeed="max"/>
+    
+    <!-- Vehicles from East -->
+    <vehicle id="car_6" type="normal_car" route="route_e2w" depart="6" departLane="best" departSpeed="max"/>
+    <vehicle id="car_7" type="normal_car" route="route_e2n" depart="8" departLane="best" departSpeed="max"/>
+    <vehicle id="car_8" type="normal_car" route="route_e2s" depart="10" departLane="best" departSpeed="max"/>
+    
+    <!-- Vehicles from West -->
+    <vehicle id="car_9" type="normal_car" route="route_w2e" depart="7" departLane="best" departSpeed="max"/>
+    <vehicle id="car_10" type="normal_car" route="route_w2n" depart="9" departLane="best" departSpeed="max"/>
+    <vehicle id="car_11" type="normal_car" route="route_w2s" depart="11" departLane="best" departSpeed="max"/>
+    
+    <!-- Additional traffic for realism -->
+    <vehicle id="car_12" type="normal_car" route="route_n2s" depart="15" departLane="best" departSpeed="max"/>
+    <vehicle id="car_13" type="normal_car" route="route_s2n" depart="16" departLane="best" departSpeed="max"/>
+    <vehicle id="car_14" type="normal_car" route="route_e2w" depart="18" departLane="best" departSpeed="max"/>
+    <vehicle id="car_15" type="normal_car" route="route_w2e" depart="20" departLane="best" departSpeed="max"/>
+    <vehicle id="car_16" type="normal_car" route="route_n2e" depart="22" departLane="best" departSpeed="max"/>
+    <vehicle id="car_17" type="normal_car" route="route_s2w" depart="24" departLane="best" departSpeed="max"/>
+    <vehicle id="car_18" type="normal_car" route="route_e2n" depart="26" departLane="best" departSpeed="max"/>
+    <vehicle id="car_19" type="normal_car" route="route_w2s" depart="28" departLane="best" departSpeed="max"/>
+    
+    <!-- ============================================ -->
+    <!-- EMERGENCY VEHICLE                            -->
+    <!-- ============================================ -->
+    
+    <!--
+        Ambulance departing from South, heading to North
+        - Departs at t=10 seconds (after some traffic has built up)
+        - Uses emergency vehicle type (red color, higher performance)
+        - Will need to navigate through traffic at the intersection
+        - In real V2X scenario, will broadcast alerts to other vehicles
+    -->
+    <vehicle id="ambulance_0" type="ambulance" route="route_s2n" depart="10" departLane="best" departSpeed="max"/>
+
+</routes>

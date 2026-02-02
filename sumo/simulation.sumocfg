@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+    SUMO Configuration File - Main Simulation Settings
+    
+    This configuration file ties together all simulation components:
+    - Network topology (network.net.xml)
+    - Vehicle routes (routes.rou.xml)
+    - Simulation parameters (time, output, GUI settings)
+    
+    Usage:
+        sumo-gui -c simulation.sumocfg    (with GUI)
+        sumo -c simulation.sumocfg        (headless mode)
+    
+    Simulation Duration: 100 seconds
+    Time Step: 0.1 seconds (100ms) for smooth simulation
+-->
+
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
+
+    <!-- ============================================ -->
+    <!-- INPUT FILES                                  -->
+    <!-- ============================================ -->
+    
+    <input>
+        <!-- Network topology file -->
+        <net-file value="network.net.xml"/>
+        
+        <!-- Route and vehicle definitions -->
+        <route-files value="routes.rou.xml"/>
+    </input>
+
+    <!-- ============================================ -->
+    <!-- TIME SETTINGS                                -->
+    <!-- ============================================ -->
+    
+    <time>
+        <!-- Simulation start time (seconds) -->
+        <begin value="0"/>
+        
+        <!-- Simulation end time (seconds) -->
+        <end value="100"/>
+        
+        <!-- Simulation time step (seconds)
+             0.1s = 100ms provides smooth vehicle movement
+             Smaller values = more accurate but slower simulation -->
+        <step-length value="0.1"/>
+    </time>
+
+    <!-- ============================================ -->
+    <!-- OUTPUT FILES (Optional)                      -->
+    <!-- ============================================ -->
+    
+    <output>
+        <!-- 
+            Uncomment to enable various output files:
+            
+            Trip information (travel times, delays, etc.)
+            <tripinfo-output value="tripinfo.xml"/>
+            
+            Full vehicle trajectories
+            <fcd-output value="fcd.xml"/>
+            
+            Summary statistics
+            <summary-output value="summary.xml"/>
+            
+            Traffic light states
+            <tls-states value="tls_states.xml"/>
+        -->
+    </output>
+
+    <!-- ============================================ -->
+    <!-- PROCESSING OPTIONS                           -->
+    <!-- ============================================ -->
+    
+    <processing>
+        <!-- Enable collision detection and warnings -->
+        <collision.action value="warn"/>
+        
+        <!-- Time to teleport vehicles if stuck (disabled = -1) -->
+        <time-to-teleport value="-1"/>
+        
+        <!-- Lateral resolution for lane changing (0 = instant) -->
+        <lateral-resolution value="0.8"/>
+    </processing>
+
+    <!-- ============================================ -->
+    <!-- ROUTING OPTIONS                              -->
+    <!-- ============================================ -->
+    
+    <routing>
+        <!-- Device assignment probability
+             1.0 = all vehicles have routing devices -->
+        <device.rerouting.probability value="0.5"/>
+        
+        <!-- Rerouting period (seconds)
+             Vehicles recalculate routes every 60s if equipped -->
+        <device.rerouting.period value="60"/>
+        
+        <!-- Consider current traffic in routing -->
+        <device.rerouting.adaptation-interval value="10"/>
+    </routing>
+
+    <!-- ============================================ -->
+    <!-- REPORT/LOGGING OPTIONS                       -->
+    <!-- ============================================ -->
+    
+    <report>
+        <!-- Show verbose messages -->
+        <verbose value="true"/>
+        
+        <!-- Suppress specific warnings -->
+        <no-warnings value="false"/>
+        
+        <!-- Log simulation time progress -->
+        <no-step-log value="false"/>
+        
+        <!-- Duration summary at end -->
+        <duration-log.statistics value="true"/>
+    </report>
+
+    <!-- ============================================ -->
+    <!-- GUI SETTINGS (for sumo-gui)                  -->
+    <!-- ============================================ -->
+    
+    <gui_only>
+        <!-- Start simulation immediately when GUI opens -->
+        <start value="false"/>
+        
+        <!-- Quit GUI when simulation ends -->
+        <quit-on-end value="false"/>
+        
+        <!-- GUI delay between steps (ms)
+             Lower = faster playback, 0 = maximum speed -->
+        <delay value="100"/>
+        
+        <!-- Initial zoom and viewport settings
+             Can be adjusted in GUI -->
+        <!-- <viewport zoom="100" x="0" y="0"/> -->
+    </gui_only>
+
+    <!-- ============================================ -->
+    <!-- RANDOM NUMBER SEED                           -->
+    <!-- ============================================ -->
+    
+    <random_number>
+        <!-- 
+            Random seed for reproducibility
+            Same seed = identical simulation results
+            Comment out or set to "random" for different results each run
+        -->
+        <seed value="42"/>
+    </random_number>
+
+</configuration>
