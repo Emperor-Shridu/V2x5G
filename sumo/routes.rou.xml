@@ -133,6 +133,12 @@
         - Will need to navigate through traffic at the intersection
         - In real V2X scenario, will broadcast alerts to other vehicles
     -->
-    <vehicle id="ambulance_0" type="ambulance" route="route_s2n" depart="10" departLane="best" departSpeed="max"/>
+    <vehicle id="ambulance_0" type="ambulance" route="route_s2n" depart="10" departLane="1" departSpeed="max"/>
+    
+    <!-- Second Ambulance: East to West, departs at t=40s -->
+    <vehicle id="ambulance_1" type="ambulance" route="route_e2w" depart="40" departLane="1" departSpeed="max"/>
+
+    <!-- Third Ambulance: West to East, departs at t=80s -->
+    <vehicle id="ambulance_2" type="ambulance" route="route_w2e" depart="80" departLane="1" departSpeed="max"/>
 
 </routes>

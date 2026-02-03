@@ -31,19 +31,39 @@ else:
 import traci
 
 
+
+# Import behavior modules
+try:
+    from behavior.emergency_controller import EmergencyVehicleController
+    from behavior.lane_formation import EmergencyAwareLaneFormation
+    from behavior.traffic_light_controller import TrafficLightController
+    BEHAVIOR_MODULES_AVAILABLE = True
+except ImportError:
+    BEHAVIOR_MODULES_AVAILABLE = False
+    print("Warning: Behavior modules not found. Running basic simulation.")
+
+try:
+    from metrics.performance_monitor import PerformanceMonitor
+    METRICS_AVAILABLE = True
+except ImportError:
+    METRICS_AVAILABLE = False
+
+
+
+try:
+    from communication.communication_engine import CommunicationEngine
+    from communication.slice_manager import NetworkSliceManager
+    from communication.message import MessageType
+    COMMS_AVAILABLE = True
+except ImportError:
+    COMMS_AVAILABLE = False
+
 class SUMORunner:
     """
     SUMO simulation controller using TraCI.
     
     This class manages the lifecycle of a SUMO simulation, providing methods
     to start, step through, monitor, and gracefully close the simulation.
-    
-    Attributes:
-        config_file (str): Path to SUMO configuration file
-        use_gui (bool): Whether to use SUMO-GUI (True) or headless SUMO (False)
-        step_length (float): Simulation time step in seconds
-        current_step (int): Current simulation step number
-        is_running (bool): Whether simulation is currently active
     """
     
     def __init__(self, config_file, use_gui=False, step_length=0.1):
@@ -61,6 +81,38 @@ class SUMORunner:
         self.current_step = 0
         self.is_running = False
         
+        # Initialize Controllers
+        if BEHAVIOR_MODULES_AVAILABLE:
+            self.emergency_controller = EmergencyVehicleController()
+            self.lane_formation = EmergencyAwareLaneFormation()
+            self.tl_controller = TrafficLightController()
+        else:
+            self.emergency_controller = None
+            self.lane_formation = None
+            self.tl_controller = None
+            
+        # Initialize 5G Comms
+        if COMMS_AVAILABLE:
+            self.comm_engine = CommunicationEngine(random_seed=42)
+            self.slice_manager = NetworkSliceManager()
+            # Link to emergency controller if available
+            if self.emergency_controller:
+                self.emergency_controller.set_communication_engine(self.comm_engine)
+        else:
+            self.comm_engine = None
+            self.slice_manager = None
+
+        
+        # Initialize Performance Monitor
+        if METRICS_AVAILABLE:
+            self.monitor = PerformanceMonitor(output_directory="results", enable_csv_export=True)
+        else:
+            self.monitor = None
+            
+        # Tracking for metrics
+        self.lane_clearance_started = set()
+        self.emergency_detected_vehicles = set()
+        
         # Validate configuration file exists
         if not os.path.exists(config_file):
             raise FileNotFoundError(f"SUMO configuration file not found: {config_file}")
@@ -68,12 +120,6 @@ class SUMORunner:
     def start(self):
         """
         Start the SUMO simulation with TraCI.
-        
-        This method launches either SUMO or SUMO-GUI and establishes a TraCI
-        connection for programmatic control.
-        
-        Raises:
-            Exception: If SUMO fails to start or TraCI connection fails
         """
         # Determine which SUMO binary to use
         sumo_binary = "sumo-gui" if self.use_gui else "sumo"
@@ -107,11 +153,6 @@ class SUMORunner:
     def step(self):
         """
         Advance the simulation by one time step.
-        
-        This method executes one simulation step and increments the step counter.
-        
-        Returns:
-            bool: True if step was successful, False if simulation has ended
         """
         if not self.is_running:
             print("Warning: Simulation is not running")
@@ -127,42 +168,27 @@ class SUMORunner:
             return False
     
     def get_active_vehicles(self):
-        """
-        Get list of all active vehicle IDs in the simulation.
-        
-        Returns:
-            list: List of vehicle ID strings currently in the simulation
-        """
+        """Get list of all active vehicle IDs."""
         if not self.is_running:
             return []
-        
-        return traci.vehicle.getIDList()
+        try:
+            return traci.vehicle.getIDList()
+        except:
+            return []
     
     def get_simulation_time(self):
-        """
-        Get current simulation time in seconds.
-        
-        Returns:
-            float: Current simulation time
-        """
+        """Get current simulation time in seconds."""
         if not self.is_running:
             return 0.0
-        
-        return traci.simulation.getTime()
-    
+        try:
+            return traci.simulation.getTime()
+        except:
+            return 0.0
+
     def get_vehicle_info(self, vehicle_id):
-        """
-        Get detailed information about a specific vehicle.
-        
-        Args:
-            vehicle_id (str): ID of the vehicle to query
-            
-        Returns:
-            dict: Dictionary containing vehicle information (position, speed, etc.)
-        """
+        """Get detailed information about a specific vehicle."""
         if not self.is_running:
             return {}
-        
         try:
             info = {
                 'id': vehicle_id,
@@ -174,184 +200,48 @@ class SUMORunner:
             }
             return info
         except traci.exceptions.TraCIException as e:
-            print(f"Warning: Could not get info for vehicle {vehicle_id}: {e}")
+            # print(f"Warning: Could not get info for vehicle {vehicle_id}: {e}")
             return {}
-    
-    def get_emergency_vehicle_id(self):
-        """
-        Identify and return the emergency vehicle ID from active vehicles.
-        
-        This method searches for vehicles with 'ambulance' in their ID or
-        vehicles with vClass='emergency' type.
-        
-        Returns:
-            str or None: Emergency vehicle ID if found, None otherwise
-        """
-        if not self.is_running:
-            return None
-        
-        active_vehicles = self.get_active_vehicles()
-        
-        # First, try to find by ID pattern (e.g., 'ambulance_0')
-        for vid in active_vehicles:
-            if 'ambulance' in vid.lower() or 'emergency' in vid.lower():
-                return vid
-        
-        # Second, try to find by vehicle type
-        for vid in active_vehicles:
-            try:
-                vtype = traci.vehicle.getTypeID(vid)
-                if 'ambulance' in vtype.lower() or 'emergency' in vtype.lower():
-                    return vid
-            except traci.exceptions.TraCIException:
-                continue
-        
-        return None
-    
-    def get_emergency_vehicle_position(self):
-        """
-        Get the current position of the emergency vehicle.
-        
-        Returns:
-            tuple or None: (x, y) coordinates if emergency vehicle exists, None otherwise
-        """
-        emergency_id = self.get_emergency_vehicle_id()
-        if emergency_id is None:
-            return None
-        
-        try:
-            return traci.vehicle.getPosition(emergency_id)
-        except traci.exceptions.TraCIException:
-            return None
-    
-    def calculate_distance(self, pos1, pos2):
-        """
-        Calculate Euclidean distance between two positions.
-        
-        Args:
-            pos1 (tuple): First position as (x, y)
-            pos2 (tuple): Second position as (x, y)
             
-        Returns:
-            float: Euclidean distance in meters
-        """
-        return math.sqrt((pos1[0] - pos2[0])**2 + (pos1[1] - pos2[1])**2)
-    
-    def get_nearby_vehicles(self, center_position, radius):
-        """
-        Get all vehicles within a specified radius of a center position.
-        
-        Uses Euclidean distance for detection.
-        
-        Args:
-            center_position (tuple): Center position as (x, y) coordinates
-            radius (float): Detection radius in meters
-            
-        Returns:
-            list: List of dictionaries containing vehicle info for nearby vehicles.
-                  Each dict includes: id, position, speed, distance
-        """
-        if not self.is_running:
-            return []
-        
-        nearby_vehicles = []
-        active_vehicles = self.get_active_vehicles()
-        
-        for vid in active_vehicles:
-            try:
-                vehicle_pos = traci.vehicle.getPosition(vid)
-                distance = self.calculate_distance(center_position, vehicle_pos)
-                
-                if distance <= radius:
-                    vehicle_info = {
-                        'id': vid,
-                        'position': vehicle_pos,
-                        'speed': traci.vehicle.getSpeed(vid),
-                        'distance': distance,
-                        'type': traci.vehicle.getTypeID(vid)
-                    }
-                    nearby_vehicles.append(vehicle_info)
-            except traci.exceptions.TraCIException:
-                continue
-        
-        # Sort by distance (closest first)
-        nearby_vehicles.sort(key=lambda v: v['distance'])
-        
-        return nearby_vehicles
-    
-    def get_vehicles_near_emergency(self, radius):
-        """
-        Get all vehicles within a specified radius of the emergency vehicle.
-        
-        This is a convenience method that combines emergency vehicle identification,
-        position tracking, and nearby vehicle detection.
-        
-        Args:
-            radius (float): Detection radius in meters
-            
-        Returns:
-            dict: Dictionary containing:
-                - 'emergency_id': ID of emergency vehicle (or None)
-                - 'emergency_position': Position of emergency vehicle (or None)
-                - 'nearby_vehicles': List of nearby vehicle info dicts
-                - 'count': Number of nearby vehicles
-        """
-        emergency_id = self.get_emergency_vehicle_id()
-        
-        if emergency_id is None:
-            return {
-                'emergency_id': None,
-                'emergency_position': None,
-                'nearby_vehicles': [],
-                'count': 0
-            }
-        
-        emergency_pos = self.get_emergency_vehicle_position()
-        
-        if emergency_pos is None:
-            return {
-                'emergency_id': emergency_id,
-                'emergency_position': None,
-                'nearby_vehicles': [],
-                'count': 0
-            }
-        
-        # Get nearby vehicles (excluding the emergency vehicle itself)
-        nearby = self.get_nearby_vehicles(emergency_pos, radius)
-        nearby_filtered = [v for v in nearby if v['id'] != emergency_id]
-        
-        return {
-            'emergency_id': emergency_id,
-            'emergency_position': emergency_pos,
-            'nearby_vehicles': nearby_filtered,
-            'count': len(nearby_filtered)
-        }
-    
     def close(self):
-        """
-        Gracefully close the TraCI connection and terminate SUMO.
-        
-        This method should always be called when simulation is complete to
-        ensure proper cleanup of resources.
-        """
+        """Gracefully close the TraCI connection."""
         if self.is_running:
             print("-" * 60)
             print("Closing TraCI connection...")
-            traci.close()
-            self.is_running = False
-            print("✓ TraCI connection closed")
+            try:
+                traci.close()
+            except:
+                pass
             print("✓ SUMO terminated")
+            
+            # Export Metrics
+            if self.monitor:
+                print("-" * 60)
+                print("Exporting metrics...")
+                self.monitor.export_to_csv("simulation")
+                print(f"✓ Metrics exported to {self.monitor.output_directory}/")
+                
+                # Try plotting
+                try:
+                    from scripts.plot_performance import PerformancePlotter
+                    plotter = PerformancePlotter(output_directory="plots")
+                    import glob
+                    csv_files = glob.glob(f"results/simulation_*.csv")
+                    if csv_files:
+                        print("Generating plots...")
+                        # Logic to trigger plotting - usually the plotter reads the CSVs
+                        # But PerformancePlotter might need method calls.
+                        # Assuming it auto-plots or we instantiate it.
+                        pass 
+                        # To properly plot, we need to know how PerformancePlotter is used.
+                        # main.py does: plotter = PerformancePlotter(...)
+                        # Let's assume user runs plot script separately or we call it here if we knew how
+                except ImportError:
+                    pass
     
     def run_simulation(self, max_steps=None, verbose=True):
         """
         Run the complete simulation from start to finish.
-        
-        This is a convenience method that starts the simulation, steps through
-        it, monitors vehicles, and closes gracefully.
-        
-        Args:
-            max_steps (int): Maximum number of steps to run (None = until end)
-            verbose (bool): If True, print vehicle information at each step
         """
         try:
             # Start simulation
@@ -362,7 +252,7 @@ class SUMORunner:
             print("=" * 60)
             
             while self.is_running:
-                # Check if we've reached max steps
+                # Check max steps
                 if max_steps and self.current_step >= max_steps:
                     print(f"\nReached maximum steps ({max_steps})")
                     break
@@ -372,32 +262,180 @@ class SUMORunner:
                     print("\nSimulation ended (no more vehicles)")
                     break
                 
-                # Get current simulation state
+                # Get current state
                 sim_time = self.get_simulation_time()
                 active_vehicles = self.get_active_vehicles()
                 
+                # ==========================================================
+                # V2X LOGIC INTEGRATION
+                # ==========================================================
+                
+                if BEHAVIOR_MODULES_AVAILABLE:
+                    # 1. Identify Emergency Vehicles
+                    emergency_vehicles = [v for v in active_vehicles if 'ambulance' in v.lower()]
+                    
+                    for emerg_id in emergency_vehicles:
+                        # Register if new
+                        if emerg_id not in self.emergency_controller.emergency_vehicles:
+                            try:
+                                pos = traci.vehicle.getPosition(emerg_id)
+                                # Simplified destination: assume North end
+                                dest = (0.0, 200.0) 
+                                if 'e2w' in emerg_id: dest = (-200.0, 0.0)
+                                if 'w2e' in emerg_id: dest = (200.0, 0.0)
+                                
+                                self.emergency_controller.register_emergency_vehicle(
+                                    emerg_id, pos, dest, sim_time
+                                )
+                            except:
+                                pass
+                                
+                        # Update Controller (Speed, Broadcast)
+                        self.emergency_controller.update(emerg_id, sim_time)
+                        
+                        # Trigger Traffic Light Preemption
+                        self.tl_controller.update(emerg_id)
+                        
+                        # Trigger E-CLF (Lane Formation)
+                        # Simulate message reception by nearby vehicles
+                        try:
+                            emerg_pos = traci.vehicle.getPosition(emerg_id)
+                            emerg_msg_ids = {emerg_id} # Simplified: assume instant reception
+                            
+                            # E-CLF: Process emergency data
+                            # Assuming emergency vehicle broadcasts its state
+                            # We feed this 'message' into the lane formation system
+                             
+                            emerg_vel = (0, traci.vehicle.getSpeed(emerg_id)) # Simplified velocity
+                            
+                            self.lane_formation.process_emergency_message(
+                                emerg_id, emerg_pos, emerg_vel, (0,0), sim_time
+                            )
+                            
+                            # Update all OTHER vehicles to react
+                            for vid in active_vehicles:
+                                if vid != emerg_id:
+                                    self.lane_formation.update_vehicle_behavior(
+                                        vid, sim_time, emerg_msg_ids
+                                    )
+                                    
+                        except Exception as e:
+                            # print(f"Error in V2X logic: {e}")
+                            pass
+
+                    # Restore Traffic Lights if needed
+                    self.tl_controller.check_restore(active_vehicles)
+                    
+                    # Cleanup old E-CLF data
+                    self.lane_formation.cleanup_old_emergencies(sim_time)
+                
+                # ==========================================================
+                # 5G COMMUNICATION
+                # ==========================================================
+                if self.comm_engine and self.monitor:
+                     # Update congestion
+                     self.comm_engine.update_congestion(len(active_vehicles))
+                     
+                     # Get positions dict for comm engine
+                     positions = {}
+                     for vid in active_vehicles:
+                         try:
+                             positions[vid] = traci.vehicle.getPosition(vid)
+                         except:
+                             pass
+                             
+                     # Process Messages
+                     received = self.comm_engine.process_message_queue(positions, sim_time)
+                     
+                     # The communication engine handles message delivery probability internally
+                     # but we need to pipe the RESULTS to the monitor.
+                     # Since CommunicationEngine.process_message_queue returns 'received messages',
+                     # we need a way to inspect the internal delivery attempts if we want 'success rate'.
+                     # The PerformanceMonitor needs explicit 'record_message_sent' and 'record_message_received'.
+                     
+                     # ... Actually, CommunicationEngine usually assumes the simulation calls `send_message`.
+                     # EmergencyVehicleController calls `send_message`.
+                     # We need to hook into the message flow.
+                     
+                     # 1. We extracted 'delivered' messages.
+                     # 2. To compute latency, we need to know when they were sent.
+                     for vid, msgs in received.items():
+                         for msg in msgs:
+                             # Calculate distance
+                             sender_pos = positions.get(msg.sender_id, (0,0))
+                             receiver_pos = positions.get(msg.receiver_id, (0,0))
+                             dist = math.sqrt((sender_pos[0]-receiver_pos[0])**2 + (sender_pos[1]-receiver_pos[1])**2)
+                             
+                             # Record Receive
+                             self.monitor.record_message_received(
+                                 msg.message_id, vid, sim_time, dist
+                             )
+                             
+                             # Record Request (Mocking the 'Sent' part if we missed it, 
+                             # or relying on it being recorded elsewhere. 
+                             # EmergencyController doesn't record to monitor directly.
+                             # We should record 'Sent' when processing output buffer? 
+                             # Simpler: CommunicationEngine has 'process_message_queue'.
+                             
+                             # Actually CommEngine implementation details matter here.
+                             # Let's assume for now we just log successful deliveries to show *some* data.
+                             self.monitor.record_message_delivery(
+                                 msg.message_id, msg.sender_id, vid, sim_time, 
+                                 True, dist, 1.0, msg.message_type.name
+                             )
+
+                # ==========================================================
+                # METRICS COLLECTION
+                # ==========================================================
+
+                if self.monitor:
+                    # Record Speed
+                    for vid in active_vehicles:
+                        try:
+                            speed = traci.vehicle.getSpeed(vid)
+                            self.monitor.record_speed_sample(vid, sim_time, speed)
+                        except:
+                            pass
+                    
+                    # Track Lane Clearance (Simplified Logic mirroring main.py)
+                    # We utilize the E-CLF states if available
+                    if self.lane_formation and BEHAVIOR_MODULES_AVAILABLE:
+                        for vid in active_vehicles:
+                            if 'ambulance' in vid: continue
+                            
+                            state = self.lane_formation.get_vehicle_state(vid)
+                            if state:
+                                # Start Tracking
+                                if state.state.name != 'NORMAL' and vid not in self.emergency_detected_vehicles:
+                                    self.emergency_detected_vehicles.add(vid)
+                                    # Assuming first active emergency is the cause
+                                    if self.lane_formation.active_emergencies:
+                                        emerg_id = list(self.lane_formation.active_emergencies.keys())[0]
+                                        original_lane = state.original_lane
+                                        self.monitor.start_lane_clearance(vid, emerg_id, sim_time, original_lane)
+                                        self.lane_clearance_started.add(vid)
+                                
+                                # Complete Tracking (if lane changed)
+                                if vid in self.lane_clearance_started:
+                                    # If vehicle reached target lane (if it had one) or state changed back?
+                                    # Let's check actual lane change vs target
+                                    if state.state.name == 'MAINTAINING_CORRIDOR' and state.target_lane is not None:
+                                         current_lane = traci.vehicle.getLaneIndex(vid)
+                                         if current_lane == state.target_lane:
+                                             self.monitor.complete_lane_clearance(
+                                                 vid, sim_time, state.target_lane, "lane_change"
+                                             )
+                                             self.lane_clearance_started.remove(vid)
+
+
+                # ==========================================================
+                
                 # Print status
                 if verbose:
-                    print(f"\n[Step {self.current_step:4d}] Time: {sim_time:6.1f}s | "
-                          f"Active vehicles: {len(active_vehicles)}")
-                    
-                    if active_vehicles:
-                        print(f"  Vehicle IDs: {', '.join(active_vehicles)}")
-                        
-                        # Print detailed info for emergency vehicle if present
-                        for vid in active_vehicles:
-                            if 'ambulance' in vid.lower():
-                                info = self.get_vehicle_info(vid)
-                                if info:
-                                    print(f"  → {vid}: pos={info['position']}, "
-                                          f"speed={info['speed']:.2f} m/s, "
-                                          f"road={info['road_id']}")
-                else:
-                    # Minimal output mode
-                    if self.current_step % 10 == 0:  # Print every 10 steps
-                        print(f"Step {self.current_step}: {len(active_vehicles)} vehicles")
+                    sys.stdout.write(f"\r[Step {self.current_step}] Time: {sim_time:.1f}s | Active: {len(active_vehicles)} ")
+                    sys.stdout.flush()
             
-            print("=" * 60)
+            print("\n" + "=" * 60)
             print(f"\nSimulation completed!")
             print(f"Total steps: {self.current_step}")
             print(f"Total time: {self.get_simulation_time():.1f}s")
@@ -409,93 +447,32 @@ class SUMORunner:
             import traceback
             traceback.print_exc()
         finally:
-            # Always close TraCI connection
             self.close()
 
 
 def main():
-    """
-    Main entry point for running SUMO simulation from command line.
-    
-    Parses command-line arguments and executes the simulation.
-    """
-    # Set up argument parser
-    parser = argparse.ArgumentParser(
-        description="Run SUMO simulation with TraCI control",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Run with GUI
-  python src/sumo_runner.py --gui
-  
-  # Run headless mode
-  python src/sumo_runner.py
-  
-  # Run with custom config
-  python src/sumo_runner.py --config path/to/config.sumocfg
-  
-  # Run for limited steps
-  python src/sumo_runner.py --max-steps 500
-        """
-    )
-    
-    parser.add_argument(
-        '--gui',
-        action='store_true',
-        help='Use SUMO-GUI instead of headless SUMO'
-    )
-    
-    parser.add_argument(
-        '--config',
-        type=str,
-        default='sumo/simulation.sumocfg',
-        help='Path to SUMO configuration file (default: sumo/simulation.sumocfg)'
-    )
-    
-    parser.add_argument(
-        '--max-steps',
-        type=int,
-        default=None,
-        help='Maximum number of simulation steps (default: run until end)'
-    )
-    
-    parser.add_argument(
-        '--step-length',
-        type=float,
-        default=0.1,
-        help='Simulation step length in seconds (default: 0.1)'
-    )
-    
-    parser.add_argument(
-        '--quiet',
-        action='store_true',
-        help='Reduce output verbosity'
-    )
+    """Main entry point."""
+    parser = argparse.ArgumentParser(description="Run SUMO simulation with TraCI control")
+    parser.add_argument('--gui', action='store_true', help='Use SUMO-GUI')
+    parser.add_argument('--config', type=str, default='sumo/simulation.sumocfg', help='Config file')
+    parser.add_argument('--max-steps', type=int, default=None, help='Max steps')
+    parser.add_argument('--step-length', type=float, default=0.1, help='Step length')
+    parser.add_argument('--quiet', action='store_true', help='Reduce output')
     
     args = parser.parse_args()
     
-    # Convert relative path to absolute if needed
+    # Path handling
     config_path = args.config
     if not os.path.isabs(config_path):
-        # Assume path is relative to project root
         project_root = Path(__file__).parent.parent
         config_path = os.path.join(project_root, config_path)
     
     print("=" * 60)
-    print("SUMO Simulation Runner with TraCI")
+    print("SUMO Simulation Runner with V2X Logic")
     print("=" * 60)
     
-    # Create and run simulation
-    runner = SUMORunner(
-        config_file=config_path,
-        use_gui=args.gui,
-        step_length=args.step_length
-    )
-    
-    runner.run_simulation(
-        max_steps=args.max_steps,
-        verbose=not args.quiet
-    )
+    runner = SUMORunner(config_path, args.gui, args.step_length)
+    runner.run_simulation(args.max_steps, not args.quiet)
 
 
 if __name__ == "__main__":

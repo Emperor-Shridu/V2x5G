@@ -1,152 +1,82 @@
-# 5G V2X Emergency Vehicle Simulation
+# 5G V2X Emergency Vehicle Simulation 🚑📶
 
-A complete 5G V2X communication system with emergency vehicle support, cooperative lane formation, and comprehensive performance monitoring.
+This project simulates an **Emergency Vehicle (Ambulance)** in a realistic traffic environment using **SUMO (Simulation of Urban MObility)** and **5G V2X Communication**.
 
-## Quick Start
+It demonstrates two key technologies for reducing emergency response time:
+1.  **Traffic Signal Preemption (Green Wave)**: Traffic lights automatically turn green for approaching ambulances.
+2.  **Emergency-Aware Cooperative Lane Formation (E-CLF)**: Regular vehicles cooperate to clear a path (corridor) for the ambulance.
 
-```bash
-# Run simulation with default settings
-python src/main.py
+## 🚀 Key Features
 
-# Custom configuration
-python src/main.py --duration 30 --vehicles 10
+*   **Realistic Traffic Simulation**: Uses SUMO to model vehicle physics, lane changing, and traffic lights.
+*   **V2X Communication**: Simulates 5G network slicing (URLLC for emergency alerts).
+*   **Intelligent Behavior**:
+    *   **Ambulance**: Broadcasts alerts, requests green lights.
+    *   **Traffic Lights**: Dynamic phase switching based on ambulance approach.
+    *   **Traffic**: Cooperative yielding (moving to adjacent lanes or slowing down).
+*   **Performance Metrics**: Collects data on travel time, speed, lane clearance time, and message latency.
 
-# With config file
-python src/main.py --config config.json
-```
-
-## Features
-
-- **5G Network Slicing** - URLLC, eMBB, mMTC with QoS guarantees
-- **Emergency Vehicle Controller** - Periodic broadcasting and smooth speed control
-- **E-CLF System** - Automated cooperative lane clearing
-- **Performance Monitoring** - Comprehensive metrics with CSV export
-- **Visualization** - Publication-quality plots (300 DPI)
-- **Single Command Execution** - Fully integrated system
-
-## System Architecture
+## 📂 Project Structure
 
 ```
-src/main.py
-├── CommunicationEngine - 5G V2X communication
-├── NetworkSliceManager - Network slicing
-├── EmergencyVehicleController - Emergency behavior
-├── EmergencyAwareLaneFormation - Lane clearing
-└── PerformanceMonitor - Metrics collection
-```
-
-## Installation
-
-```bash
-# Install dependencies
-pip install matplotlib seaborn scipy pandas numpy
-
-# Run simulation
-python src/main.py
-```
-
-## Output
-
-- **CSV Files** - 6 files in `results/` directory
-- **Plots** - PNG files in `plots/` directory
-- **Console** - Real-time progress and summary statistics
-
-## Documentation
-
-- [Main Simulation Guide](docs/main_simulation_guide.md)
-- [5G Communication Guide](docs/5g_communication_guide.md)
-- [Emergency Controller Guide](docs/emergency_controller_guide.md)
-- [E-CLF Guide](docs/eclf_guide.md)
-- [Performance Monitor Guide](docs/performance_monitor_guide.md)
-- [Plotting Guide](docs/plotting_guide.md)
-
-## Project Structure
-
-```
-5g/
+V2X5G/
 ├── src/
-│   ├── main.py                    # Main integration script
-│   ├── communication/             # 5G communication engine
-│   ├── behavior/                  # Emergency controller & E-CLF
-│   └── metrics/                   # Performance monitoring
-├── scripts/                       # Visualization tools
-├── examples/                      # Demonstration scripts
-├── docs/                          # Comprehensive guides
-├── results/                       # CSV output
-└── plots/                         # Generated plots
+│   ├── behavior/           # Smart vehicle logic
+│   │   ├── emergency_controller.py  # Ambulance logic
+│   │   ├── lane_formation.py        # E-CLF logic (vehicles moving aside)
+│   │   └── traffic_light_controller.py # Green wave logic
+│   ├── metrics/            # Data collection
+│   ├── communication/      # 5G network simulation
+│   ├── sumo_runner.py      # Main simulation runner (SUMO + Python)
+│   └── main.py             # (Legacy) Standalone simulator
+├── sumocfg/                # SUMO configuration files
+│   ├── simulation.sumocfg
+│   ├── network.net.xml
+│   └── routes.rou.xml
+├── scripts/                # Plotting and utility scripts
+├── results/                # CSV output files
+└── plots/                  # Generated performance graphs
 ```
 
-## Configuration
+## 🛠️ Requirements
 
-Create `config.json`:
+*   **Python 3.8+**
+*   **SUMO 1.10+** (Added to PATH)
+*   **Python Dependencies**:
+    ```bash
+    pip install matplotlib pandas traci sumolib
+    ```
 
-```json
-{
-  "simulation_duration": 120.0,
-  "num_regular_vehicles": 30,
-  "emergency_target_speed": 18.0,
-  "broadcast_interval": 0.5,
-  "detection_range": 250.0
-}
-```
+## 🏃‍♂️ How to Run
 
-## Command-Line Options
-
-```
---config, -c    Path to configuration JSON file
---duration, -d  Simulation duration in seconds
---vehicles, -v  Number of regular vehicles
---quiet, -q     Suppress verbose output
-```
-
-## Examples
-
-### Basic Usage
-```bash
-python src/main.py
-```
-
-### Custom Scenario
-```bash
-python src/main.py --duration 60 --vehicles 20
-```
-
-### Quiet Mode
-```bash
-python src/main.py --quiet
-```
-
-## Demonstrations
+### 1. Run the Simulation
+Execute the main runner script. This will open the SUMO GUI and start the simulation.
 
 ```bash
-# Communication engine demo
-python examples/demo_5g_communication.py
+python src/sumo_runner.py --gui
+```
+*   **Flags**:
+    *   `--gui`: Opens visual simulation window.
+    *   `--max-steps 1000`: Set a limit on simulation steps.
+    *   `--quiet`: Reduce console output.
 
-# Emergency controller demo
-python examples/demo_emergency_controller.py
+### 2. View Results
+After the simulation completes, it will:
+1.  Save performance data to `results/*.csv`.
+2.  Automatically generate plots in `plots/` (if configured).
 
-# E-CLF demo
-python examples/demo_eclf.py
+### 3. Generate Plots Manually
+If you want to regenerate plots from existing data:
 
-# Performance monitor demo
-python examples/demo_performance_monitor.py
-
-# Plotting demo
-python scripts/plot_performance.py
+```bash
+python -m scripts.plot_performance
 ```
 
-## Key Metrics
+## 📊 Metrics Explained
 
-- End-to-end latency
-- Message success probability
-- Ambulance travel time
-- Lane clearance time
-- Speed variance
+*   **Lane Clearance Time**: How fast vehicles move out of the ambulance's lane.
+*   **Ambulance Speed**: Tracks speed consistency (less stop-and-go).
+*   **Travel Time**: Total time to cross the network.
 
-## License
-
-Research and educational use.
-
-## Author
-
-V2X Research Team
+## 👥 Contributors
+Developed by the V2X Research Team.

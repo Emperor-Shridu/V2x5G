@@ -171,8 +171,14 @@ class EmergencyAwareLaneFormation:
             current_time: Current simulation time
         """
         # Determine target lane for emergency vehicle
-        # For simplicity, use the leftmost lane (lane 0) as emergency lane
-        target_lane = 0
+        # Dynamically get the ambulance's current lane
+        try:
+            if TRACI_AVAILABLE:
+                target_lane = traci.vehicle.getLaneIndex(emergency_id)
+            else:
+                target_lane = 0
+        except:
+             target_lane = 0
         
         # Create or update emergency context
         if emergency_id not in self.active_emergencies:

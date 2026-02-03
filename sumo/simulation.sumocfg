@@ -39,7 +39,7 @@
         <begin value="0"/>
         
         <!-- Simulation end time (seconds) -->
-        <end value="100"/>
+        <end value="200"/>
         
         <!-- Simulation time step (seconds)
              0.1s = 100ms provides smooth vehicle movement
