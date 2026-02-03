@@ -1,7 +1,0 @@
-vehicle_id,measurement_start,measurement_end,sample_count,average_speed,speed_variance,speed_std_dev,min_speed,max_speed,vehicle_type
-ambulance_0,0.0,9.9,100,0.0,0.0,0.0,0.0,0.0,emergency
-car_0,0.0,9.9,100,13.0,0.0,0.0,13.0,13.0,regular
-car_1,0.0,9.9,100,13.0,0.0,0.0,13.0,13.0,regular
-car_2,0.0,9.9,100,13.0,0.0,0.0,13.0,13.0,regular
-car_3,0.0,9.9,100,13.0,0.0,0.0,13.0,13.0,regular
-car_4,0.0,9.9,100,13.0,0.0,0.0,13.0,13.0,regular
