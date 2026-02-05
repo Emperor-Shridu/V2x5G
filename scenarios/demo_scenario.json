@@ -1,0 +1,49 @@
+{
+  "scenario_id": "scenario_4302",
+  "name": "Multi-EV Scenario (2 EVs)",
+  "description": "Scenario with 2 emergency vehicles, 70% overlap probability",
+  "num_evs": 2,
+  "emergency_vehicles": [
+    {
+      "vehicle_id": "ambulance_0",
+      "vehicle_type": "AMBULANCE",
+      "priority": 1,
+      "route": {
+        "route_id": "route_0",
+        "edges": [
+          "edge_7",
+          "edge_8",
+          "edge_3",
+          "edge_6"
+        ],
+        "start_time": 24.13615300958425,
+        "end_time": 74.28960531559245,
+        "length": 1253.836307650205
+      },
+      "spawn_position": 0.0,
+      "target_speed": 24.760946790010472
+    },
+    {
+      "vehicle_id": "fire_truck_1",
+      "vehicle_type": "FIRE_TRUCK",
+      "priority": 2,
+      "route": {
+        "route_id": "route_1",
+        "edges": [
+          "edge_9",
+          "edge_8",
+          "edge_4"
+        ],
+        "start_time": 32.0135146265473,
+        "end_time": 70.90029077192771,
+        "length": 972.1694036345103
+      },
+      "spawn_position": 0.0,
+      "target_speed": 28.73925431532428
+    }
+  ],
+  "regular_vehicles": 50,
+  "duration": 300.0,
+  "overlap_probability": 0.7,
+  "seed": 202
+}

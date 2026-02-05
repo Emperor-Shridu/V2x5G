@@ -271,8 +271,15 @@ class SUMORunner:
                 # ==========================================================
                 
                 if BEHAVIOR_MODULES_AVAILABLE:
-                    # 1. Identify Emergency Vehicles
-                    emergency_vehicles = [v for v in active_vehicles if 'ambulance' in v.lower()]
+                    # 1. Identify Emergency Vehicles (multiple types)
+                    # Detect ambulances, fire trucks, and police vehicles
+                    emergency_vehicles = [
+                        v for v in active_vehicles 
+                        if any(keyword in v.lower() for keyword in ['ambulance', 'fire', 'police'])
+                    ]
+                    
+                    # Import emergency types for auto-detection
+                    from src.behavior import get_vehicle_type_from_id
                     
                     for emerg_id in emergency_vehicles:
                         # Register if new
@@ -284,8 +291,11 @@ class SUMORunner:
                                 if 'e2w' in emerg_id: dest = (-200.0, 0.0)
                                 if 'w2e' in emerg_id: dest = (200.0, 0.0)
                                 
+                                # Auto-detect vehicle type from ID
+                                vehicle_type = get_vehicle_type_from_id(emerg_id)
+                                
                                 self.emergency_controller.register_emergency_vehicle(
-                                    emerg_id, pos, dest, sim_time
+                                    emerg_id, pos, dest, sim_time, vehicle_type
                                 )
                             except:
                                 pass
@@ -392,6 +402,9 @@ class SUMORunner:
                     # Record Speed
                     for vid in active_vehicles:
                         try:
+                            # Skip all emergency vehicles (ambulance, fire, police)
+                            if any(keyword in vid.lower() for keyword in ['ambulance', 'fire', 'police']):
+                                continue
                             speed = traci.vehicle.getSpeed(vid)
                             self.monitor.record_speed_sample(vid, sim_time, speed)
                         except:

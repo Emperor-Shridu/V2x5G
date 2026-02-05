@@ -41,6 +41,28 @@
         - Vehicle class: emergency (allows special privileges)
     -->
     <vType id="ambulance" vClass="emergency" accel="3.5" decel="5.0" sigma="0.3" length="6" minGap="2.5" maxSpeed="16.67" color="red"/>
+    
+    <!--
+        Fire Truck
+        - Length: 8m (larger than ambulance)
+        - Max speed: 55 km/h (15.28 m/s)
+        - Acceleration: 3.0 m/s² (slower than ambulance due to size)
+        - Deceleration: 5.5 m/s² (heavy vehicle, good brakes)
+        - Color: Orange (fire vehicle)
+        - Vehicle class: emergency
+    -->
+    <vType id="fire_truck" vClass="emergency" accel="3.0" decel="5.5" sigma="0.3" length="8" minGap="3.0" maxSpeed="15.28" color="orange"/>
+    
+    <!--
+        Police Vehicle
+        - Length: 5.5m (similar to normal car)
+        - Max speed: 65 km/h (18.06 m/s) - fastest emergency vehicle
+        - Acceleration: 4.0 m/s² (high performance)
+        - Deceleration: 5.5 m/s² (performance brakes)
+        - Color: Blue (police vehicle)
+        - Vehicle class: emergency
+    -->
+    <vType id="police" vClass="emergency" accel="4.0" decel="5.5" sigma="0.2" length="5.5" minGap="2.5" maxSpeed="18.06" color="blue"/>
 
     <!-- ============================================ -->
     <!-- ROUTE DEFINITIONS                            -->
@@ -127,18 +149,18 @@
     <!-- ============================================ -->
     
     <!--
-        Ambulance departing from South, heading to North
-        - Departs at t=10 seconds (after some traffic has built up)
-        - Uses emergency vehicle type (red color, higher performance)
-        - Will need to navigate through traffic at the intersection
-        - In real V2X scenario, will broadcast alerts to other vehicles
+        Multiple Emergency Vehicles with different types and priorities:
+        - ambulance_0: Ambulance (Priority 5) - South to North, departs at t=10s
+        - fire_0: Fire Truck (Priority 4) - East to West, departs at t=25s
+        - police_0: Police (Priority 3) - West to East, departs at t=40s
+        - ambulance_1: Ambulance (Priority 5) - North to South, departs at t=60s
     -->
     <vehicle id="ambulance_0" type="ambulance" route="route_s2n" depart="10" departLane="1" departSpeed="max"/>
     
-    <!-- Second Ambulance: East to West, departs at t=40s -->
-    <vehicle id="ambulance_1" type="ambulance" route="route_e2w" depart="40" departLane="1" departSpeed="max"/>
-
-    <!-- Third Ambulance: West to East, departs at t=80s -->
-    <vehicle id="ambulance_2" type="ambulance" route="route_w2e" depart="80" departLane="1" departSpeed="max"/>
+    <vehicle id="fire_0" type="fire_truck" route="route_e2w" depart="25" departLane="1" departSpeed="max"/>
+    
+    <vehicle id="police_0" type="police" route="route_w2e" depart="40" departLane="1" departSpeed="max"/>
+    
+    <vehicle id="ambulance_1" type="ambulance" route="route_n2s" depart="60" departLane="1" departSpeed="max"/>
 
 </routes>

@@ -42,9 +42,20 @@ except ImportError:
             def getLaneNumber(eid): return 2
     traci = MockTraCI()
 
-from typing import Dict, Tuple, Optional, Set
+from typing import Dict, List, Tuple, Optional, Set
+from dataclasses import dataclass, field
 from enum import Enum
-from dataclasses import dataclass
+import math
+
+# Import priority functions
+try:
+    from .priority import get_priority, resolve_conflict
+except ImportError:
+    # Fallback if priority module not available
+    def get_priority(vtype):
+        return 1
+    def resolve_conflict(evs, tie_breaker='distance'):
+        return [ev['id'] for ev in evs]
 import time
 
 
@@ -146,12 +157,14 @@ class EmergencyAwareLaneFormation:
         # Active emergency contexts
         self.active_emergencies: Dict[str, EmergencyContext] = {}
         
-        # Statistics
+        # Statistics (enhanced for multi-EV)
         self.stats = {
             'total_lane_changes': 0,
             'total_speed_reductions': 0,
             'emergencies_handled': 0,
-            'vehicles_responded': set()
+            'vehicles_responded': set(),
+            'multi_ev_scenarios': 0,  # Count of times multiple EVs were active
+            'max_concurrent_evs': 0   # Maximum number of concurrent EVs
         }
     
     def process_emergency_message(self, 
@@ -271,31 +284,63 @@ class EmergencyAwareLaneFormation:
                                vehicle_id: str,
                                emergency_ids: Set[str]) -> Optional[EmergencyContext]:
         """
-        Find the closest emergency vehicle to this vehicle.
+        Find the most relevant emergency vehicle for this vehicle to respond to.
+        
+        Uses a combination of distance and priority:
+        1. First filters EVs within detection range
+        2. Then prioritizes by vehicle type (Ambulance > Fire > Police)
+        3. Within same priority, chooses closest EV
         
         Args:
             vehicle_id: ID of the vehicle
             emergency_ids: Set of emergency vehicle IDs
             
         Returns:
-            EmergencyContext of closest emergency, or None
+            EmergencyContext of most relevant emergency, or None
         """
         try:
             vehicle_pos = traci.vehicle.getPosition(vehicle_id)
             
-            closest_emergency = None
-            min_distance = float('inf')
+            # Collect all emergencies within range with their info
+            candidates = []
             
             for emerg_id in emergency_ids:
                 if emerg_id in self.active_emergencies:
                     context = self.active_emergencies[emerg_id]
                     distance = self._calculate_distance(vehicle_pos, context.position)
                     
-                    if distance < min_distance and distance < self.detection_range:
-                        min_distance = distance
-                        closest_emergency = context
+                    if distance < self.detection_range:
+                        # Get vehicle type from emergency ID for priority
+                        from .emergency_types import get_vehicle_type_from_id
+                        vtype = get_vehicle_type_from_id(emerg_id)
+                        
+                        candidates.append({
+                            'id': emerg_id,
+                            'context': context,
+                            'distance': distance,
+                            'type': vtype
+                        })
             
-            return closest_emergency
+            if not candidates:
+                return None
+            
+            # If only one candidate, return it
+            if len(candidates) == 1:
+                return candidates[0]['context']
+            
+            # Multiple candidates - use priority-based resolution
+            # Resolve by priority (distance used as tie-breaker)
+            ordered_ids = resolve_conflict(candidates, tie_breaker='distance')
+            
+            # Return highest priority emergency
+            for ev_id in ordered_ids:
+                for candidate in candidates:
+                    if candidate['id'] == ev_id:
+                        return candidate['context']
+            
+            # Fallback: return first candidate
+            return candidates[0]['context']
+            
         except:
             return None
     
@@ -581,6 +626,12 @@ class EmergencyAwareLaneFormation:
         Returns:
             dict: Statistics including lane changes, speed reductions, etc.
         """
+        # Track multi-EV scenarios
+        concurrent_evs = len(self.active_emergencies)
+        if concurrent_evs > 1 and concurrent_evs > self.stats.get('max_concurrent_evs', 0):
+            self.stats['max_concurrent_evs'] = concurrent_evs
+            self.stats['multi_ev_scenarios'] = self.stats.get('multi_ev_scenarios', 0) + 1
+        
         return {
             'total_lane_changes': self.stats['total_lane_changes'],
             'total_speed_reductions': self.stats['total_speed_reductions'],
@@ -590,7 +641,9 @@ class EmergencyAwareLaneFormation:
             'vehicles_in_emergency_state': sum(
                 1 for s in self.vehicle_states.values() 
                 if s.state != VehicleState.NORMAL
-            )
+            ),
+            'multi_ev_scenarios': self.stats.get('multi_ev_scenarios', 0),
+            'max_concurrent_evs': self.stats.get('max_concurrent_evs', 0)
         }
     
     def reset_statistics(self):
@@ -599,7 +652,9 @@ class EmergencyAwareLaneFormation:
             'total_lane_changes': 0,
             'total_speed_reductions': 0,
             'emergencies_handled': 0,
-            'vehicles_responded': set()
+            'vehicles_responded': set(),
+            'multi_ev_scenarios': 0,
+            'max_concurrent_evs': 0
         }
     
     def reset(self):
@@ -607,3 +662,64 @@ class EmergencyAwareLaneFormation:
         self.vehicle_states.clear()
         self.active_emergencies.clear()
         self.reset_statistics()
+    
+    # ==================== Multi-EV Helper Methods ====================
+    
+    def get_all_active_emergencies(self) -> List[str]:
+        """
+        Get list of all active emergency vehicle IDs.
+        
+        Returns:
+            list: List of emergency vehicle IDs
+        """
+        return list(self.active_emergencies.keys())
+    
+    def get_emergency_count(self) -> int:
+        """
+        Get count of active emergency vehicles.
+        
+        Returns:
+            int: Number of active emergencies
+        """
+        return len(self.active_emergencies)
+    
+    def get_closest_emergency_to_vehicle(self, vehicle_id: str) -> Optional[str]:
+        """
+        Get the ID of the closest emergency vehicle to a given vehicle.
+        
+        Args:
+            vehicle_id: ID of the vehicle
+            
+        Returns:
+            str: Emergency vehicle ID, or None
+        """
+        if not self.active_emergencies:
+            return None
+        
+        try:
+            vehicle_pos = traci.vehicle.getPosition(vehicle_id)
+            
+            closest_id = None
+            min_distance = float('inf')
+            
+            for emerg_id, context in self.active_emergencies.items():
+                distance = self._calculate_distance(vehicle_pos, context.position)
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_id = emerg_id
+            
+            return closest_id
+        except:
+            return None
+    
+    def remove_emergency(self, emergency_id: str):
+        """
+        Remove an emergency vehicle from tracking.
+        
+        Useful when an emergency vehicle completes its journey.
+        
+        Args:
+            emergency_id: ID of the emergency vehicle to remove
+        """
+        if emergency_id in self.active_emergencies:
+            del self.active_emergencies[emergency_id]

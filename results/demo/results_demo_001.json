@@ -1,0 +1,54 @@
+{
+  "run_id": "demo_001",
+  "timestamp": "2026-02-05T17:05:10.395610",
+  "duration": 300.0,
+  "num_emergency_vehicles": 1,
+  "num_regular_vehicles": 50,
+  "travel_times": [
+    {
+      "vehicle_id": "ambulance_0",
+      "start_time": 0.0,
+      "end_time": 125.5,
+      "travel_time": 125.5,
+      "distance": 3500.0,
+      "average_speed": 27.888446215139442
+    }
+  ],
+  "clearance_times": [
+    {
+      "vehicle_id": "ambulance_0",
+      "clearance_start": 10.0,
+      "clearance_end": 55.2,
+      "clearance_time": 45.2,
+      "vehicles_cleared": 15,
+      "corridor_formed": true
+    }
+  ],
+  "stability": {
+    "oscillation_count": 3,
+    "oscillation_rate": 1.2,
+    "corridor_integrity": 0.85,
+    "corridor_breaks": 2,
+    "downstream_speed_variance": 5.5,
+    "max_consecutive_oscillations": 2
+  },
+  "latency": {
+    "avg_latency": 15.5,
+    "max_latency": 45.2,
+    "min_latency": 5.1,
+    "latency_std": 8.3,
+    "p95_latency": 35.0,
+    "p99_latency": 42.0
+  },
+  "reliability": {
+    "total_messages": 1000,
+    "successful_messages": 985,
+    "failed_messages": 15,
+    "success_rate": 0.985,
+    "packet_loss_rate": 0.015
+  },
+  "metadata": {
+    "controller": "v2x_cooperative",
+    "scenario": "two_ev_overlap"
+  }
+}

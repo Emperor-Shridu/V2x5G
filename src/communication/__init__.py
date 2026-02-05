@@ -39,6 +39,13 @@ from .slice_manager import (
     SliceAllocation
 )
 
+from .comms_monitor import (
+    CommunicationsMonitor,
+    CommunicationMode,
+    CommunicationMetrics,
+    BehaviorParameters
+)
+
 __all__ = [
     'V2XMessage',
     'MessageType',
@@ -55,5 +62,9 @@ __all__ = [
     'CommunicationEngine',
     'NetworkSliceManager',
     'SliceType',
-    'SliceAllocation'
+    'SliceAllocation',
+    'CommunicationsMonitor',
+    'CommunicationMode',
+    'CommunicationMetrics',
+    'BehaviorParameters'
 ]

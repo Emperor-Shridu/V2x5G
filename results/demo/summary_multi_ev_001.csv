@@ -1,0 +1,8 @@
+Metric,Value
+run_id,multi_ev_001
+duration,300.0
+num_emergency_vehicles,3
+num_regular_vehicles,50
+timestamp,2026-02-05T17:05:10.395961
+avg_travel_time,145.17
+avg_clearance_time,50.23

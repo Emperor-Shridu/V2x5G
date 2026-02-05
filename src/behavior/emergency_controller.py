@@ -43,6 +43,9 @@ from dataclasses import dataclass, field
 import time
 import math
 
+from .emergency_types import EmergencyVehicleType, get_priority, get_vehicle_type_from_id
+from .token import TokenManager, CorridorToken
+
 
 @dataclass
 class EmergencyMetrics:
@@ -138,7 +141,9 @@ class EmergencyVehicleController:
                  target_speed: float = 15.0,
                  speed_tolerance: float = 2.0,
                  max_acceleration: float = 2.5,
-                 max_deceleration: float = 4.5):
+                 max_deceleration: float = 4.5,
+                 token_duration: float = 30.0,
+                 token_segment_length: float = 200.0):
         """
         Initialize the emergency vehicle controller.
         
@@ -148,15 +153,23 @@ class EmergencyVehicleController:
             speed_tolerance: Acceptable speed deviation in m/s
             max_acceleration: Maximum acceleration in m/s²
             max_deceleration: Maximum deceleration in m/s²
+            token_duration: Duration of corridor tokens in seconds (default: 30s)
+            token_segment_length: Length of corridor segment in meters (default: 200m)
         """
         self.broadcast_interval = broadcast_interval
         self.target_speed = target_speed
         self.speed_tolerance = speed_tolerance
         self.max_acceleration = max_acceleration
         self.max_deceleration = max_deceleration
+        self.token_duration = token_duration
+        self.token_segment_length = token_segment_length
         
         # Emergency vehicle tracking
         self.emergency_vehicles: Dict[str, EmergencyMetrics] = {}
+        
+        # Multi-EV support: track vehicle types and priorities
+        self.vehicle_types: Dict[str, EmergencyVehicleType] = {}
+        self.vehicle_priorities: Dict[str, int] = {}
         
         # Broadcast timing
         self.last_broadcast: Dict[str, float] = {}
@@ -164,11 +177,19 @@ class EmergencyVehicleController:
         # Communication engine reference (set via set_communication_engine)
         self.comm_engine = None
         
-        # Statistics
+        # Token manager for corridor tokens
+        self.token_manager = TokenManager()
+        
+        # Statistics (enhanced for multi-EV)
         self.stats = {
             'total_broadcasts': 0,
             'total_speed_adjustments': 0,
-            'vehicles_managed': set()
+            'vehicles_managed': set(),
+            'by_type': {
+                EmergencyVehicleType.AMBULANCE: {'count': 0, 'broadcasts': 0},
+                EmergencyVehicleType.FIRE_TRUCK: {'count': 0, 'broadcasts': 0},
+                EmergencyVehicleType.POLICE: {'count': 0, 'broadcasts': 0}
+            }
         }
     
     def set_communication_engine(self, comm_engine):
@@ -184,7 +205,8 @@ class EmergencyVehicleController:
                                    vehicle_id: str,
                                    start_position: Tuple[float, float],
                                    destination: Tuple[float, float],
-                                   current_time: float):
+                                   current_time: float,
+                                   vehicle_type: Optional[EmergencyVehicleType] = None):
         """
         Register an emergency vehicle for tracking.
         
@@ -193,7 +215,17 @@ class EmergencyVehicleController:
             start_position: Starting position (x, y)
             destination: Target destination (x, y)
             current_time: Current simulation time
+            vehicle_type: Type of emergency vehicle (auto-detected from ID if not provided)
         """
+        # Auto-detect vehicle type if not provided
+        if vehicle_type is None:
+            vehicle_type = get_vehicle_type_from_id(vehicle_id)
+        
+        # Store vehicle type and priority
+        self.vehicle_types[vehicle_id] = vehicle_type
+        self.vehicle_priorities[vehicle_id] = get_priority(vehicle_type)
+        
+        # Create metrics tracking
         self.emergency_vehicles[vehicle_id] = EmergencyMetrics(
             vehicle_id=vehicle_id,
             start_time=current_time,
@@ -203,6 +235,7 @@ class EmergencyVehicleController:
         
         self.last_broadcast[vehicle_id] = current_time - self.broadcast_interval
         self.stats['vehicles_managed'].add(vehicle_id)
+        self.stats['by_type'][vehicle_type]['count'] += 1
     
     def update(self, vehicle_id: str, current_time: float):
         """
@@ -239,6 +272,18 @@ class EmergencyVehicleController:
         
         # Update metrics
         self._update_metrics(vehicle_id, current_time)
+    
+    def update_all(self, current_time: float):
+        """
+        Update all registered emergency vehicles.
+        
+        Convenience method to update all EVs in a single call.
+        
+        Args:
+            current_time: Current simulation time
+        """
+        for vehicle_id in list(self.emergency_vehicles.keys()):
+            self.update(vehicle_id, current_time)
     
     def _update_speed_control(self, vehicle_id: str, current_time: float):
         """
@@ -299,7 +344,7 @@ class EmergencyVehicleController:
     
     def _broadcast_emergency_message(self, vehicle_id: str, current_time: float):
         """
-        Broadcast an emergency message.
+        Broadcast an emergency message and generate corridor token.
         
         Args:
             vehicle_id: ID of the emergency vehicle
@@ -317,10 +362,17 @@ class EmergencyVehicleController:
             metrics = self.emergency_vehicles[vehicle_id]
             destination = metrics.destination
             
+            # Get vehicle type and priority
+            vehicle_type = self.vehicle_types.get(vehicle_id, EmergencyVehicleType.AMBULANCE)
+            priority = self.vehicle_priorities.get(vehicle_id, 3)
+            
+            # Generate corridor token for current lane segment
+            self._generate_corridor_token(vehicle_id, current_time)
+            
             # Import here to avoid circular dependency
             from ..communication import EmergencyAlert
             
-            # Create emergency message
+            # Create emergency message with vehicle type
             message = EmergencyAlert(
                 message_id=f"{vehicle_id}_alert_{int(current_time * 10)}",
                 sender_id=vehicle_id,
@@ -328,8 +380,11 @@ class EmergencyVehicleController:
                 position=position,
                 velocity=(0.0, speed),  # Simplified: assume moving in y direction
                 destination=destination,
-                priority_level=5  # Maximum priority
+                priority_level=priority
             )
+            
+            # Add vehicle type to payload
+            message.payload['vehicle_type'] = vehicle_type.value
             
             # Send via communication engine
             self.comm_engine.send_message(message)
@@ -337,6 +392,7 @@ class EmergencyVehicleController:
             # Update metrics
             metrics.broadcast_count += 1
             self.stats['total_broadcasts'] += 1
+            self.stats['by_type'][vehicle_type]['broadcasts'] += 1
             
         except Exception as e:
             # Silently handle errors (vehicle may have left simulation)
@@ -475,12 +531,19 @@ class EmergencyVehicleController:
         self.stats = {
             'total_broadcasts': 0,
             'total_speed_adjustments': 0,
-            'vehicles_managed': set()
+            'vehicles_managed': set(),
+            'by_type': {
+                EmergencyVehicleType.AMBULANCE: {'count': 0, 'broadcasts': 0},
+                EmergencyVehicleType.FIRE_TRUCK: {'count': 0, 'broadcasts': 0},
+                EmergencyVehicleType.POLICE: {'count': 0, 'broadcasts': 0}
+            }
         }
     
     def reset(self):
         """Reset the entire controller."""
         self.emergency_vehicles.clear()
+        self.vehicle_types.clear()
+        self.vehicle_priorities.clear()
         self.last_broadcast.clear()
         self.reset_statistics()
     
@@ -533,3 +596,169 @@ class EmergencyVehicleController:
             speed: New target speed in m/s
         """
         self.target_speed = max(0.0, speed)
+    
+    # ==================== Multi-EV Helper Methods ====================
+    
+    def get_all_emergency_vehicles(self) -> List[str]:
+        """
+        Get list of all registered emergency vehicle IDs.
+        
+        Returns:
+            list: List of vehicle IDs
+        """
+        return list(self.emergency_vehicles.keys())
+    
+    def get_vehicle_type(self, vehicle_id: str) -> Optional[EmergencyVehicleType]:
+        """
+        Get vehicle type for an emergency vehicle.
+        
+        Args:
+            vehicle_id: ID of the emergency vehicle
+            
+        Returns:
+            EmergencyVehicleType or None
+        """
+        return self.vehicle_types.get(vehicle_id)
+    
+    def get_vehicle_priority(self, vehicle_id: str) -> Optional[int]:
+        """
+        Get priority level for an emergency vehicle.
+        
+        Args:
+            vehicle_id: ID of the emergency vehicle
+            
+        Returns:
+            int: Priority level (1-5) or None
+        """
+        return self.vehicle_priorities.get(vehicle_id)
+    
+    def get_vehicles_by_type(self, vehicle_type: EmergencyVehicleType) -> List[str]:
+        """
+        Get all emergency vehicles of a specific type.
+        
+        Args:
+            vehicle_type: Type of emergency vehicle
+            
+        Returns:
+            list: List of vehicle IDs of the specified type
+        """
+        return [
+            vid for vid, vtype in self.vehicle_types.items()
+            if vtype == vehicle_type
+        ]
+    
+    def get_highest_priority_vehicle(self) -> Optional[str]:
+        """
+        Get the emergency vehicle with the highest priority.
+        
+        If multiple vehicles have the same highest priority, returns the first one.
+        
+        Returns:
+            str: Vehicle ID with highest priority, or None if no vehicles
+        """
+        if not self.vehicle_priorities:
+            return None
+        
+        return max(self.vehicle_priorities.items(), key=lambda x: x[1])[0]
+    
+    def get_active_emergency_count(self) -> int:
+        """
+        Get count of active (not completed) emergency vehicles.
+        
+        Returns:
+            int: Number of active emergency vehicles
+        """
+        return sum(
+            1 for metrics in self.emergency_vehicles.values()
+            if not metrics.journey_complete
+        )
+    
+    def get_statistics_by_type(self) -> Dict:
+        """
+        Get statistics broken down by vehicle type.
+        
+        Returns:
+            dict: Statistics per vehicle type
+        """
+        return {
+            vtype.value: {
+                'count': self.stats['by_type'][vtype]['count'],
+                'broadcasts': self.stats['by_type'][vtype]['broadcasts'],
+                'active': len([
+                    vid for vid, t in self.vehicle_types.items()
+                    if t == vtype and not self.emergency_vehicles[vid].journey_complete
+                ])
+            }
+            for vtype in EmergencyVehicleType
+        }
+    
+    # ==================== Corridor Token Methods ====================
+    
+    def _generate_corridor_token(self, vehicle_id: str, current_time: float):
+        """
+        Generate a corridor token for the emergency vehicle's current lane segment.
+        
+        Args:
+            vehicle_id: ID of the emergency vehicle
+            current_time: Current simulation time
+        """
+        try:
+            # Get current lane information
+            road_id = traci.vehicle.getRoadID(vehicle_id)
+            lane_index = traci.vehicle.getLaneIndex(vehicle_id)
+            lane_id = f"{road_id}_{lane_index}"
+            
+            # Get current position along lane
+            lane_position = traci.vehicle.getLanePosition(vehicle_id)
+            
+            # Calculate segment range (ahead of vehicle)
+            segment_start = lane_position
+            segment_end = lane_position + self.token_segment_length
+            
+            # Create corridor token
+            token = self.token_manager.create_token(
+                lane_id=lane_id,
+                segment_range=(segment_start, segment_end),
+                start_time=current_time,
+                duration=self.token_duration,
+                owner_ev_id=vehicle_id
+            )
+            
+        except Exception as e:
+            # Silently handle errors (vehicle may not be in simulation or TraCI unavailable)
+            pass
+    
+    def get_token_manager(self) -> TokenManager:
+        """
+        Get the token manager instance.
+        
+        Returns:
+            TokenManager: The token manager
+        """
+        return self.token_manager
+    
+    def get_active_tokens_for_vehicle(self, vehicle_id: str, current_time: float) -> list:
+        """
+        Get all active corridor tokens for a specific vehicle.
+        
+        Args:
+            vehicle_id: ID of the emergency vehicle
+            current_time: Current simulation time
+            
+        Returns:
+            list: List of active CorridorToken objects
+        """
+        return self.token_manager.get_tokens_by_owner(vehicle_id, active_only=True, current_time=current_time)
+    
+    def cleanup_expired_tokens(self, current_time: float) -> int:
+        """
+        Clean up expired corridor tokens.
+        
+        Args:
+            current_time: Current simulation time
+            
+        Returns:
+            int: Number of tokens cleaned up
+        """
+        return self.token_manager.cleanup_expired_tokens(current_time)
+

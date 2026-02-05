@@ -1,0 +1,63 @@
+{
+  "run_id": "multi_ev_001",
+  "timestamp": "2026-02-05T17:05:10.395981",
+  "duration": 300.0,
+  "num_emergency_vehicles": 3,
+  "num_regular_vehicles": 50,
+  "travel_times": [
+    {
+      "vehicle_id": "ambulance_0",
+      "start_time": 0.0,
+      "end_time": 125.5,
+      "travel_time": 125.5,
+      "distance": 3500.0,
+      "average_speed": 27.888446215139442
+    },
+    {
+      "vehicle_id": "fire_truck_1",
+      "start_time": 30.0,
+      "end_time": 180.0,
+      "travel_time": 150.0,
+      "distance": 4200.0,
+      "average_speed": 28.0
+    },
+    {
+      "vehicle_id": "police_2",
+      "start_time": 60.0,
+      "end_time": 220.0,
+      "travel_time": 160.0,
+      "distance": 4500.0,
+      "average_speed": 28.125
+    }
+  ],
+  "clearance_times": [
+    {
+      "vehicle_id": "ambulance_0",
+      "clearance_start": 10.0,
+      "clearance_end": 55.2,
+      "clearance_time": 45.2,
+      "vehicles_cleared": 15,
+      "corridor_formed": true
+    },
+    {
+      "vehicle_id": "fire_truck_1",
+      "clearance_start": 40.0,
+      "clearance_end": 90.5,
+      "clearance_time": 50.5,
+      "vehicles_cleared": 18,
+      "corridor_formed": true
+    },
+    {
+      "vehicle_id": "police_2",
+      "clearance_start": 70.0,
+      "clearance_end": 125.0,
+      "clearance_time": 55.0,
+      "vehicles_cleared": 20,
+      "corridor_formed": true
+    }
+  ],
+  "stability": null,
+  "latency": null,
+  "reliability": null,
+  "metadata": {}
+}
