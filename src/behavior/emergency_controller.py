@@ -237,7 +237,7 @@ class EmergencyVehicleController:
         self.stats['vehicles_managed'].add(vehicle_id)
         self.stats['by_type'][vehicle_type]['count'] += 1
     
-    def update(self, vehicle_id: str, current_time: float):
+    def update(self, vehicle_id: str, current_time: float, timestep: float = 0.1):
         """
         Update emergency vehicle behavior.
         
@@ -246,6 +246,7 @@ class EmergencyVehicleController:
         Args:
             vehicle_id: ID of the emergency vehicle
             current_time: Current simulation time
+            timestep: Simulation time step in seconds
         """
         # Check if vehicle is registered
         if vehicle_id not in self.emergency_vehicles:
@@ -265,13 +266,13 @@ class EmergencyVehicleController:
             return
         
         # Update speed control
-        self._update_speed_control(vehicle_id, current_time)
+        self._update_speed_control(vehicle_id, current_time, timestep)
         
         # Update message broadcasting
         self._update_broadcasting(vehicle_id, current_time)
         
         # Update metrics
-        self._update_metrics(vehicle_id, current_time)
+        self._update_metrics(vehicle_id, current_time, timestep)
     
     def update_all(self, current_time: float):
         """
@@ -285,7 +286,7 @@ class EmergencyVehicleController:
         for vehicle_id in list(self.emergency_vehicles.keys()):
             self.update(vehicle_id, current_time)
     
-    def _update_speed_control(self, vehicle_id: str, current_time: float):
+    def _update_speed_control(self, vehicle_id: str, current_time: float, timestep: float = 0.1):
         """
         Update speed control for smooth driving.
         
@@ -294,6 +295,7 @@ class EmergencyVehicleController:
         Args:
             vehicle_id: ID of the emergency vehicle
             current_time: Current simulation time
+            timestep: Simulation time step in seconds
         """
         try:
             current_speed = traci.vehicle.getSpeed(vehicle_id)
@@ -307,11 +309,11 @@ class EmergencyVehicleController:
                 # Limit by max acceleration/deceleration
                 if speed_diff > 0:
                     # Need to accelerate
-                    max_change = self.max_acceleration * 1.0  # Assume 1s timestep
+                    max_change = self.max_acceleration * timestep
                     new_speed = current_speed + min(speed_diff, max_change)
                 else:
                     # Need to decelerate
-                    max_change = self.max_deceleration * 1.0
+                    max_change = self.max_deceleration * timestep
                     new_speed = current_speed + max(-abs(speed_diff), -max_change)
                 
                 # Set new speed
@@ -398,13 +400,14 @@ class EmergencyVehicleController:
             # Silently handle errors (vehicle may have left simulation)
             pass
     
-    def _update_metrics(self, vehicle_id: str, current_time: float):
+    def _update_metrics(self, vehicle_id: str, current_time: float, timestep: float = 0.1):
         """
         Update performance metrics.
         
         Args:
             vehicle_id: ID of the emergency vehicle
             current_time: Current simulation time
+            timestep: Simulation time step in seconds
         """
         try:
             metrics = self.emergency_vehicles[vehicle_id]
@@ -413,10 +416,9 @@ class EmergencyVehicleController:
             current_speed = traci.vehicle.getSpeed(vehicle_id)
             metrics.speed_samples.append(current_speed)
             
-            # Update distance (simplified: use speed * time)
+            # Update distance
             if len(metrics.speed_samples) > 1:
-                # Assume 1 second timestep
-                metrics.total_distance += current_speed * 1.0
+                metrics.total_distance += current_speed * timestep
             
             # Check if destination reached
             current_pos = traci.vehicle.getPosition(vehicle_id)

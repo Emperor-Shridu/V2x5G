@@ -376,10 +376,16 @@ class EmergencyAwareLaneFormation:
         try:
             state = self.vehicle_states[vehicle_id]
             
-            # Skip if already responding to this emergency
-            if (state.emergency_context and 
-                state.emergency_context.emergency_id == emergency_context.emergency_id):
-                return
+            # Priority check: Do not override a higher priority emergency response
+            if state.emergency_context:
+                from .emergency_types import get_vehicle_type_from_id
+                current_ev_type = get_vehicle_type_from_id(state.emergency_context.emergency_id)
+                new_ev_type = get_vehicle_type_from_id(emergency_context.emergency_id)
+                
+                from .priority import get_priority
+                if get_priority(current_ev_type) > get_priority(new_ev_type):
+                    # Already responding to higher priority, ignore this one
+                    return
             
             # Get current vehicle info
             current_lane = traci.vehicle.getLaneIndex(vehicle_id)
@@ -439,11 +445,13 @@ class EmergencyAwareLaneFormation:
             
             num_lanes = traci.edge.getLaneNumber(edge_id)
             
-            # Determine target lane (move right if possible)
-            if current_lane < num_lanes - 1:
-                target_lane = current_lane + 1  # Move right
-            elif current_lane > 0:
-                target_lane = current_lane - 1  # Move left if can't go right
+            # Determine target lane (move away from emergency vehicle's lane)
+            # Strategy: move right (lower index) by default if possible, 
+            # otherwise move left (higher index).
+            if current_lane > 0:
+                target_lane = current_lane - 1  # Move right
+            elif current_lane < num_lanes - 1:
+                target_lane = current_lane + 1  # Move left
             else:
                 # Only one lane, just slow down
                 self._initiate_speed_reduction(vehicle_id, current_time)
@@ -552,15 +560,29 @@ class EmergencyAwareLaneFormation:
             if emergency_context.emergency_id not in self.active_emergencies:
                 return True
             
-            # Get positions
+            # Use TraCI for precise longitudinal comparison if available
+            if TRACI_AVAILABLE:
+                try:
+                    veh_road = traci.vehicle.getRoadID(vehicle_id)
+                    ev_road = traci.vehicle.getRoadID(emergency_context.emergency_id)
+                    
+                    if veh_road == ev_road:
+                        veh_pos = traci.vehicle.getLanePosition(vehicle_id)
+                        ev_pos = traci.vehicle.getLanePosition(emergency_context.emergency_id)
+                        
+                        # If EV is significantly ahead on the same road, it has passed
+                        if ev_pos > veh_pos + 40.0:  # 40m buffer
+                            return True
+                except:
+                    pass
+            
+            # Fallback/Additional check: Euclidean distance
             vehicle_pos = traci.vehicle.getPosition(vehicle_id)
             emergency_pos = emergency_context.position
-            
-            # Simple heuristic: emergency has passed if it's far behind
-            # (This is simplified - in practice, would check direction of travel)
             distance = self._calculate_distance(vehicle_pos, emergency_pos)
             
             # If emergency is more than detection range away, consider it passed
+            # Or if it was already detected and is now moving away (handled by ev_pos check above)
             return distance > self.detection_range
             
         except:

@@ -89,7 +89,13 @@ class RLConfig:
     detection_range: float = 100.0
 
 
-class QNetwork:
+if TORCH_AVAILABLE:
+    BaseModule = nn.Module
+else:
+    BaseModule = object
+
+
+class QNetwork(BaseModule):
     """
     Q-Network for DQN agent.
     
@@ -128,11 +134,6 @@ class QNetwork:
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
         return self.fc3(x)
-
-
-# Make QNetwork inherit from nn.Module only if PyTorch is available
-if TORCH_AVAILABLE:
-    QNetwork.__bases__ = (nn.Module,)
 
 
 class ReplayBuffer:

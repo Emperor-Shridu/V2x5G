@@ -21,6 +21,11 @@ import argparse
 import math
 from pathlib import Path
 
+# Add project root to path
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 # Check if SUMO_HOME environment variable is set
 if 'SUMO_HOME' in os.environ:
     tools = os.path.join(os.environ['SUMO_HOME'], 'tools')
@@ -267,178 +272,124 @@ class SUMORunner:
                 active_vehicles = self.get_active_vehicles()
                 
                 # ==========================================================
-                # V2X LOGIC INTEGRATION
+                # V2X LOGIC INTEGRATION (Behavioral Triggering via 5G)
                 # ==========================================================
                 
                 if BEHAVIOR_MODULES_AVAILABLE:
-                    # 1. Identify Emergency Vehicles (multiple types)
-                    # Detect ambulances, fire trucks, and police vehicles
+                    # 1. Identify Emergency Vehicles
                     emergency_vehicles = [
                         v for v in active_vehicles 
-                        if any(keyword in v.lower() for keyword in ['ambulance', 'fire', 'police'])
+                        if any(kw in v.lower() for kw in ['ambulance', 'fire', 'police'])
                     ]
                     
-                    # Import emergency types for auto-detection
                     from src.behavior import get_vehicle_type_from_id
                     
+                    # 2. Update Emergency Controllers (Broadcasting into CommEngine)
                     for emerg_id in emergency_vehicles:
-                        # Register if new
                         if emerg_id not in self.emergency_controller.emergency_vehicles:
                             try:
                                 pos = traci.vehicle.getPosition(emerg_id)
-                                # Simplified destination: assume North end
                                 dest = (0.0, 200.0) 
                                 if 'e2w' in emerg_id: dest = (-200.0, 0.0)
                                 if 'w2e' in emerg_id: dest = (200.0, 0.0)
                                 
-                                # Auto-detect vehicle type from ID
                                 vehicle_type = get_vehicle_type_from_id(emerg_id)
-                                
                                 self.emergency_controller.register_emergency_vehicle(
                                     emerg_id, pos, dest, sim_time, vehicle_type
                                 )
-                            except:
-                                pass
+                            except: pass
                                 
-                        # Update Controller (Speed, Broadcast)
-                        self.emergency_controller.update(emerg_id, sim_time)
-                        
-                        # Trigger Traffic Light Preemption
+                        self.emergency_controller.update(emerg_id, sim_time, self.step_length)
                         self.tl_controller.update(emerg_id)
                         
-                        # Trigger E-CLF (Lane Formation)
-                        # Simulate message reception by nearby vehicles
+                        # Feed EV context to Lane Formation engine
                         try:
                             emerg_pos = traci.vehicle.getPosition(emerg_id)
-                            emerg_msg_ids = {emerg_id} # Simplified: assume instant reception
-                            
-                            # E-CLF: Process emergency data
-                            # Assuming emergency vehicle broadcasts its state
-                            # We feed this 'message' into the lane formation system
-                             
-                            emerg_vel = (0, traci.vehicle.getSpeed(emerg_id)) # Simplified velocity
-                            
+                            emerg_vel = (0, traci.vehicle.getSpeed(emerg_id))
                             self.lane_formation.process_emergency_message(
                                 emerg_id, emerg_pos, emerg_vel, (0,0), sim_time
                             )
-                            
-                            # Update all OTHER vehicles to react
-                            for vid in active_vehicles:
-                                if vid != emerg_id:
-                                    self.lane_formation.update_vehicle_behavior(
-                                        vid, sim_time, emerg_msg_ids
-                                    )
-                                    
-                        except Exception as e:
-                            # print(f"Error in V2X logic: {e}")
-                            pass
+                        except: pass
 
-                    # Restore Traffic Lights if needed
-                    self.tl_controller.check_restore(active_vehicles)
-                    
-                    # Cleanup old E-CLF data
-                    self.lane_formation.cleanup_old_emergencies(sim_time)
-                
-                # ==========================================================
-                # 5G COMMUNICATION
-                # ==========================================================
-                if self.comm_engine and self.monitor:
-                     # Update congestion
-                     self.comm_engine.update_congestion(len(active_vehicles))
-                     
-                     # Get positions dict for comm engine
-                     positions = {}
-                     for vid in active_vehicles:
-                         try:
-                             positions[vid] = traci.vehicle.getPosition(vid)
-                         except:
-                             pass
-                             
-                     # Process Messages
-                     received = self.comm_engine.process_message_queue(positions, sim_time)
-                     
-                     # The communication engine handles message delivery probability internally
-                     # but we need to pipe the RESULTS to the monitor.
-                     # Since CommunicationEngine.process_message_queue returns 'received messages',
-                     # we need a way to inspect the internal delivery attempts if we want 'success rate'.
-                     # The PerformanceMonitor needs explicit 'record_message_sent' and 'record_message_received'.
-                     
-                     # ... Actually, CommunicationEngine usually assumes the simulation calls `send_message`.
-                     # EmergencyVehicleController calls `send_message`.
-                     # We need to hook into the message flow.
-                     
-                     # 1. We extracted 'delivered' messages.
-                     # 2. To compute latency, we need to know when they were sent.
-                     for vid, msgs in received.items():
-                         for msg in msgs:
-                             # Calculate distance
-                             sender_pos = positions.get(msg.sender_id, (0,0))
-                             receiver_pos = positions.get(msg.receiver_id, (0,0))
-                             dist = math.sqrt((sender_pos[0]-receiver_pos[0])**2 + (sender_pos[1]-receiver_pos[1])**2)
-                             
-                             # Record Receive
-                             self.monitor.record_message_received(
-                                 msg.message_id, vid, sim_time, dist
-                             )
-                             
-                             # Record Request (Mocking the 'Sent' part if we missed it, 
-                             # or relying on it being recorded elsewhere. 
-                             # EmergencyController doesn't record to monitor directly.
-                             # We should record 'Sent' when processing output buffer? 
-                             # Simpler: CommunicationEngine has 'process_message_queue'.
-                             
-                             # Actually CommEngine implementation details matter here.
-                             # Let's assume for now we just log successful deliveries to show *some* data.
-                             self.monitor.record_message_delivery(
-                                 msg.message_id, msg.sender_id, vid, sim_time, 
-                                 True, dist, 1.0, msg.message_type.name
-                             )
-
-                # ==========================================================
-                # METRICS COLLECTION
-                # ==========================================================
-
-                if self.monitor:
-                    # Record Speed
-                    for vid in active_vehicles:
-                        try:
-                            # Skip all emergency vehicles (ambulance, fire, police)
-                            if any(keyword in vid.lower() for keyword in ['ambulance', 'fire', 'police']):
-                                continue
-                            speed = traci.vehicle.getSpeed(vid)
-                            self.monitor.record_speed_sample(vid, sim_time, speed)
-                        except:
-                            pass
-                    
-                    # Track Lane Clearance (Simplified Logic mirroring main.py)
-                    # We utilize the E-CLF states if available
-                    if self.lane_formation and BEHAVIOR_MODULES_AVAILABLE:
+                    # 3. Process 5G Communication (Deliver queued messages)
+                    received_messages = {}
+                    if self.comm_engine:
+                        self.comm_engine.update_congestion(len(active_vehicles))
+                        positions = {}
                         for vid in active_vehicles:
-                            if 'ambulance' in vid: continue
+                            try: positions[vid] = traci.vehicle.getPosition(vid)
+                            except: pass
+                        received_messages = self.comm_engine.process_message_queue(positions, sim_time)
+
+                    # 4. Update Regular Vehicle Behaviors based on RECEIVED messages
+                    for vid in active_vehicles:
+                        # Determine which EV IDs this vehicle received messages from
+                        received_ev_ids = set()
+                        if vid in received_messages:
+                            from src.communication.message import MessageType
+                            received_ev_ids = {
+                                msg.sender_id for msg in received_messages[vid] 
+                                if msg.message_type == MessageType.URLLC
+                            }
+                        
+                        # Apply behavioral logic (E-CLF)
+                        self.lane_formation.update_vehicle_behavior(vid, sim_time, received_ev_ids)
+                    
+                    # 5. Housekeeping
+                    self.tl_controller.check_restore(active_vehicles)
+                    self.lane_formation.cleanup_old_emergencies(sim_time)
+
+                # ==========================================================
+                # DATA COLLECTION AND MONITORING
+                # ==========================================================
+                if self.monitor:
+                    # Record Communications Statistics
+                    if 'received_messages' in locals():
+                        for vid, msgs in received_messages.items():
+                            for msg in msgs:
+                                try:
+                                    sender_pos = traci.vehicle.getPosition(msg.sender_id)
+                                    recv_pos = traci.vehicle.getPosition(vid)
+                                    dist = math.sqrt((sender_pos[0]-recv_pos[0])**2 + (sender_pos[1]-recv_pos[1])**2)
+                                    self.monitor.record_message_delivery(
+                                        msg.message_id, msg.sender_id, vid, sim_time, 
+                                        True, dist, 1.0, msg.message_type.name
+                                    )
+                                except: pass
+
+                    # Record Performance Metrics
+                    for vid in active_vehicles:
+                        # Record speed for regular vehicles
+                        try:
+                            is_ev = any(kw in vid.lower() for kw in ['ambulance', 'fire', 'police'])
+                            if not is_ev:
+                                speed = traci.vehicle.getSpeed(vid)
+                                self.monitor.record_speed_sample(vid, sim_time, speed)
+                        except: pass
+                        
+                        # Track Lane Clearance Events
+                        state = self.lane_formation.get_vehicle_state(vid)
+                        if state:
+                            # Start clearing tracking
+                            if state.state.name != 'NORMAL' and vid not in self.emergency_detected_vehicles:
+                                self.emergency_detected_vehicles.add(vid)
+                                if state.emergency_context:
+                                    self.monitor.start_lane_clearance(
+                                        vid, state.emergency_context.emergency_id, 
+                                        sim_time, state.original_lane
+                                    )
+                                    self.lane_clearance_started.add(vid)
                             
-                            state = self.lane_formation.get_vehicle_state(vid)
-                            if state:
-                                # Start Tracking
-                                if state.state.name != 'NORMAL' and vid not in self.emergency_detected_vehicles:
-                                    self.emergency_detected_vehicles.add(vid)
-                                    # Assuming first active emergency is the cause
-                                    if self.lane_formation.active_emergencies:
-                                        emerg_id = list(self.lane_formation.active_emergencies.keys())[0]
-                                        original_lane = state.original_lane
-                                        self.monitor.start_lane_clearance(vid, emerg_id, sim_time, original_lane)
-                                        self.lane_clearance_started.add(vid)
-                                
-                                # Complete Tracking (if lane changed)
-                                if vid in self.lane_clearance_started:
-                                    # If vehicle reached target lane (if it had one) or state changed back?
-                                    # Let's check actual lane change vs target
-                                    if state.state.name == 'MAINTAINING_CORRIDOR' and state.target_lane is not None:
-                                         current_lane = traci.vehicle.getLaneIndex(vid)
-                                         if current_lane == state.target_lane:
+                            # Complete clearing tracking
+                            if vid in self.lane_clearance_started:
+                                if state.state.name == 'MAINTAINING_CORRIDOR' and state.target_lane is not None:
+                                     try:
+                                         if traci.vehicle.getLaneIndex(vid) == state.target_lane:
                                              self.monitor.complete_lane_clearance(
                                                  vid, sim_time, state.target_lane, "lane_change"
                                              )
                                              self.lane_clearance_started.remove(vid)
+                                     except: pass
 
 
                 # ==========================================================
